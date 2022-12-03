@@ -1,4 +1,6 @@
 import numpy as np
+from isaacgym.gymutil import WireframeSphereGeometry, draw_lines
+from isaacgym import gymapi
 
 def sep(name = "", length = 110):
     name = f" {name} "
@@ -16,11 +18,37 @@ class DebugInfo:
         self.asset_handle = sim_ctx.asset_handle
         self.env_handles = sim_ctx.env_handles
         self.actor_handles = sim_ctx.actor_handles
+
+        self.red_sphere = WireframeSphereGeometry(0.05, color = (1, 0, 0))
+        self.green_sphere = WireframeSphereGeometry(0.05, color = (0, 1, 0))
+        self.blue_sphere = WireframeSphereGeometry(0.05, color = (0, 0, 1))
     
     def print_all_info(self):
         self.print_rb_info()
         self.print_joint_info()
         self.print_dof_info()
+    
+    def draw(self, viewer, actor_handle, env_handle, dyn, idx):
+        rb_pos = dyn.get_rb_position()[idx] # (num_rb, 3)
+        rb_contact_forces = dyn.get_contact_forces()[idx] # (num_rb, 3)
+
+        for rb_idx in range(len(rb_pos)):
+            pos = rb_pos[rb_idx]
+            if rb_idx == 0: # [0]
+                pass
+            elif rb_idx % 3 == 1:
+                draw_lines(self.red_sphere, self.gym, viewer, env_handle, gymapi.Transform(p = gymapi.Vec3(*pos))) # [1, 4, 7, 10] = abduct
+            elif rb_idx % 3 == 2:
+                draw_lines(self.blue_sphere, self.gym, viewer, env_handle, gymapi.Transform(p = gymapi.Vec3(*pos))) # [2, 5, 8, 11] = thigh
+            elif rb_idx % 3 == 0:
+                draw_lines(self.green_sphere, self.gym, viewer, env_handle, gymapi.Transform(p = gymapi.Vec3(*pos))) # [3, 6, 9, 12] = shank
+
+
+
+    
+    def visualize(self, viewer, dyn):
+        for idx, (actor_handle, env_handle) in enumerate(zip(self.actor_handles, self.env_handles)):
+            self.draw(viewer, actor_handle, env_handle, dyn, idx)
         
     def print_rb_info(self):
         sep('Rigid Bodies')

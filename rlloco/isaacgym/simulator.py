@@ -1,32 +1,34 @@
 from isaacgym import gymapi
+
 import torch
-from scipy.spatial.transform import Rotation as R
 import numpy as np
+from scipy.spatial.transform import Rotation as R
 
-
+       
 class SimulatorContext:
-    def __init__(self, num_environments, dt, asset_root, asset_path):
+    def __init__(self, num_environments, use_cuda, asset_root, asset_path):
         # TODO: clean up parameters into objects, terrain config (flat/rough)
+        
+        self.use_cuda = use_cuda
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.gym = gymapi.acquire_gym()
-        self.sim = self.create_simulation_environment(dt)
+        self.sim = self.create_simulation_environment()
 
         self.asset_handle = self.create_asset(asset_root, asset_path)
-
-        self.env_handles, self.actor_handles = self.create_envs(
-            self.asset_handle, num_environments)
-
+        self.env_actor_handles = self.create_envs(self.asset_handle, num_environments)
+    
         self.gym.prepare_sim(self.sim)
 
-    def create_simulation_environment(self, dt):
+    def create_simulation_environment(self):
         sim_params = gymapi.SimParams()
-        sim_params.dt = dt
+        sim_params.dt = 1. / 60.
         sim_params.substeps = 2
         sim_params.up_axis = gymapi.UP_AXIS_Z
         sim_params.gravity = gymapi.Vec3(0.0, 0.0, -9.81)
-        sim_params.use_gpu_pipeline = True
+        sim_params.use_gpu_pipeline = self.use_cuda
 
-        sim_params.physx.use_gpu = True
+        sim_params.physx.use_gpu = self.use_cuda
         sim_params.physx.num_threads = 8
         sim_params.physx.solver_type = 1  # more robust, slightly more expensive
         sim_params.physx.num_position_iterations = 6
@@ -75,33 +77,24 @@ class SimulatorContext:
         pose.p = gymapi.Vec3(0.0, 0.0, 0.35)  # TODO: figure out correct height
         pose.r = gymapi.Quat(*identity_quat)
 
-        envs, actors = [], []
+        env_actor_handles = []
         for env_index in range(num_environments):
             env = self.gym.create_env(self.sim, lower, upper, num_per_row)
-            actor = self.gym.create_actor(
-                env, asset_handle, pose, f"Actor", env_index, 1)
+            actor = self.gym.create_actor(env, asset_handle, pose, f"Actor", env_index, 1)
 
             self.gym.enable_actor_dof_force_sensors(env, actor)
+
             asset_props = self.gym.get_asset_dof_properties(asset_handle)
             asset_props["driveMode"].fill(gymapi.DOF_MODE_POS)
-            asset_props["stiffness"].fill(17)
+            asset_props["stiffness"].fill(75)
             asset_props["damping"].fill(0.5)
+
             self.gym.set_actor_dof_properties(env, actor, asset_props)
 
-            envs.append(env)
-            actors.append(actor)
-
-        return envs, actors
-
-    def sample_data(self, orig, bounds, num_times):
-        if num_times < 1:
-            raise RuntimeError("Number of times to sample data should be > 0")
-        else:
-            out = np.zeros((num_times, len(orig)))
-            mask = np.array(orig) == -1
-
-            for i in range(num_times):
-                random_arr = np.random.sample(len(bounds)) * bounds
-                out[i, :] = (mask * random_arr) + (1 - mask) * orig
-
-            return torch.from_numpy(out)
+            env_actor_handles.append((env, actor))
+            
+        return env_actor_handles
+    
+    def release(self):
+        self.gym.destroy_sim(self.sim)
+        self.gym.destroy_viewer(self.viewer)
