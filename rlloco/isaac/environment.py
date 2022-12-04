@@ -4,7 +4,7 @@ import torch
 import numpy as np
 import pytorch3d.transforms.rotation_conversions as R
 
-from rlloco.isaacgym.simulator import SimulatorContext
+from rlloco.isaac.simulator import SimulatorContext
 
 class IsaacGymEnvironment:
     def __init__(self, num_environments, use_cuda, asset_root, asset_path, default_dof_pos):
@@ -27,9 +27,6 @@ class IsaacGymEnvironment:
         self._init_camera(640, 480)
     
     def _init_camera(self, width, height):
-        pass
-
-        '''
         camera_props = gymapi.CameraProperties()
         camera_props.width = width
         camera_props.height = height
@@ -43,7 +40,6 @@ class IsaacGymEnvironment:
 
         self.cam_width = width
         self.cam_height = height
-        '''
 
     def _acquire_state_tensors(self):
         _root_states = self.gym.acquire_actor_root_state_tensor(self.sim)  # (num_actors, (pos + rot + linvel + angvel) = 13)
@@ -137,12 +133,12 @@ class IsaacGymEnvironment:
         self.gym.simulate(self.sim)
         self.gym.fetch_results(self.sim, True)
         self.gym.step_graphics(self.sim)
-        #self.gym.render_all_camera_sensors(self.sim)
+        self.gym.render_all_camera_sensors(self.sim)
 
         self._refresh()
     
     def render(self):
-        return None#return self.gym.get_camera_image(self.sim, self.env_actor_handles[0][0], self.camera_handle, gymapi.IMAGE_COLOR).reshape(self.cam_height, self.cam_width, 4)
+        return self.gym.get_camera_image(self.sim, self.env_actor_handles[0][0], self.camera_handle, gymapi.IMAGE_COLOR).reshape(self.cam_height, self.cam_width, 4)
     
     def reset(self, env_index = None):
         if env_index is None:

@@ -1,3 +1,4 @@
+from isaacgym import gymapi, gymtorch
 from rlloco.agents.concurrent_training import ConcurrentTrainingEnv
 
 import torch
@@ -51,8 +52,8 @@ class CustomCallback(BaseCallback):
         pass
 
     def _on_step(self) -> bool:
-        # cv2.imshow('training', self.env_.render())
-        # cv2.waitKey(1)
+        cv2.imshow('training', self.env_.render())
+        cv2.waitKey(1)
         """
         This method will be called by the model after each call to `env.step()`.
 

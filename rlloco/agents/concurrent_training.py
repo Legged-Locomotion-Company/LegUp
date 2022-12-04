@@ -1,4 +1,4 @@
-from rlloco.isaacgym.environment import IsaacGymEnvironment
+from rlloco.isaac.environment import IsaacGymEnvironment
 
 import gym
 import torch
@@ -68,7 +68,7 @@ class ConcurrentTrainingEnv(VecEnv):
         self.term_contacts = [0, 1, 4, 7, 10] # body, shoulder
         self.dt = 1. / 60. # TODO: get this dynamically
         self.max_ep_len = 1000 / self.dt
-        self.cmd = torch.Tensor([1, 0, 0]).repeat(num_environments, 1).to(self.device) # desired [x_vel, y_vel, ang_vel]
+        self.cmd = torch.Tensor([3.5, 0, 0]).repeat(num_environments, 1).to(self.device) # desired [x_vel, y_vel, ang_vel]
 
         # tracking for agent
         self.takeoff_time = torch.zeros(num_environments, 4).to(self.device)
@@ -136,7 +136,9 @@ class ConcurrentTrainingEnv(VecEnv):
         sqrt_vel = torch.sqrt(torch.linalg.norm(feet_vel, dim = -1))
         r_cl = G.k_cl * torch.pow(foot_height - G.des_foot_height, 2) * sqrt_vel
 
-        r_ori = G.k_ori * torch.pow(tgm.quaternion_to_angle_axis(root_quat)[:, 2], 2) # maybe wrong, not sure what it should be
+        yaw = tgm.quaternion_to_angle_axis(root_quat)[:, 2]
+        yaw_diff = torch.where(yaw > torch.pi, 2 * torch.pi - yaw, yaw)
+        r_ori = G.k_ori * torch.pow(yaw_diff, 2) # maybe wrong, not sure what it should be
 
         r_t = G.k_t * self.sq_norm(self.env.get_joint_torque())
 
