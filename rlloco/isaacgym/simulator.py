@@ -10,7 +10,7 @@ class SimulatorContext:
         # TODO: clean up parameters into objects, terrain config (flat/rough)
         
         self.use_cuda = use_cuda
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device("cuda" if use_cuda else "cpu")
 
         self.gym = gymapi.acquire_gym()
         self.sim = self.create_simulation_environment()

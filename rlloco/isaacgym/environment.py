@@ -7,19 +7,19 @@ import pytorch3d.transforms.rotation_conversions as R
 from rlloco.isaacgym.simulator import SimulatorContext
 
 class IsaacGymEnvironment:
-    def __init__(self, num_environments, use_cuda, asset_root, asset_path):
+    def __init__(self, num_environments, use_cuda, asset_root, asset_path, default_dof_pos):
         self.ctx = SimulatorContext(num_environments, use_cuda, asset_root, asset_path)
         self.num_environments = num_environments
         self.gym = self.ctx.gym
         self.sim = self.ctx.sim
         self.env_actor_handles = self.ctx.env_actor_handles
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device("cuda" if use_cuda else "cpu")
 
         self.all_env_index = torch.Tensor(range(num_environments)).to(torch.int).to(self.device)
         
 
         # TODO: parameterize this
-        self.default_dof_pos = torch.Tensor([0, -0.8, 1.6, 0, -0.8, 1.6, 0, -0.8, 1.6, 0, -0.8, 1.6]).to(self.device)
+        self.default_dof_pos = default_dof_pos
         self.command_dof_pos = self.default_dof_pos.repeat(num_environments, 1)
 
         self._acquire_state_tensors()
