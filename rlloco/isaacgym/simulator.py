@@ -86,8 +86,8 @@ class SimulatorContext:
 
             asset_props = self.gym.get_asset_dof_properties(asset_handle)
             asset_props["driveMode"].fill(gymapi.DOF_MODE_POS)
-            asset_props["stiffness"].fill(75)
-            asset_props["damping"].fill(0.5)
+            asset_props["stiffness"].fill(17)
+            asset_props["damping"].fill(0.4)
 
             self.gym.set_actor_dof_properties(env, actor, asset_props)
 

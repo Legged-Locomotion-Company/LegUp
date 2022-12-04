@@ -1,12 +1,10 @@
-from isaacgym import gymapi
+from rlloco.isaacgym.environment import IsaacGymEnvironment
 
 import gym
 import torch
 import numpy as np
 import torchgeometry as tgm
 from stable_baselines3.common.vec_env import VecEnv
-
-from rlloco.isaacgym.environment import IsaacGymEnvironment
 
 
 class HistoryBuffer:
@@ -37,7 +35,7 @@ class HistoryBuffer:
 
     def reset(self, update_idx):
         self.elapsed_time[update_idx] = 0
-        self.data[:, update_idx, :] = 0
+        self.data[update_idx, :, :] = 0
 
 class G:
     action_scale = 0.1
@@ -69,27 +67,30 @@ class ConcurrentTrainingEnv(VecEnv):
         self.feet_idx = [3, 6, 9, 12] # TODO: dynamically get this by rb name
         self.term_contacts = [0, 1, 4, 7, 10] # body, shoulder
         self.dt = 1. / 60. # TODO: get this dynamically
-        self.max_ep_len = 20 / self.dt
+        self.max_ep_len = 1000 / self.dt
         self.cmd = torch.Tensor([1, 0, 0]).repeat(num_environments, 1).to(self.device) # desired [x_vel, y_vel, ang_vel]
 
         # tracking for agent
         self.takeoff_time = torch.zeros(num_environments, 4).to(self.device)
         self.touchdown_time = torch.zeros(num_environments, 4).to(self.device)
         self.ep_lens = torch.zeros(num_environments).to(self.device)
-        self.prev_joint_pos = torch.zeros_like(self.default_dof_pos)
+        self.prev_joint_pos = torch.zeros(num_environments, 12).to(self.device)
         self.des_joint_pos_hist = HistoryBuffer(num_environments, self.dt, 0.02, 2, 12, self.device)
         self.joint_pos_err_hist = HistoryBuffer(num_environments, self.dt, 0.02, 3, 12, self.device)
         self.joint_vel_hist = HistoryBuffer(num_environments, self.dt, 0.02, 3, 12, self.device)
 
         # OpenAI Gym Environment required fields
-        self.observation_space = gym.spaces.Box(low = np.ones(150) * -np.Inf, high = np.ones(150) * np.Inf, dtype = np.float32)
-        self.action_space = gym.spaces.Box(low = np.ones(12) * -np.Inf, high = np.ones(12) * np.Inf, dtype = np.float32)
+        #self.observation_space = gym.spaces.Box(low = np.ones(153) * -np.Inf, high = np.ones(153) * np.Inf, dtype = np.float32)
+        #self.action_space = gym.spaces.Box(low = np.ones(12) * -np.Inf, high = np.ones(12) * np.Inf, dtype = np.float32)
+        self.observation_space = gym.spaces.Box(low = np.ones(153) * -10000000, high = np.ones(153) * 10000000, dtype = np.float32)
+        self.action_space = gym.spaces.Box(low = np.ones(12) * -10000000, high = np.ones(12) * 10000000, dtype = np.float32)
         self.metadata = {"render_modes": ['rgb_array']}
         self.reward_range = (-float("inf"), float("inf"))
         self.spec = None
+
     
-    def sq_norm(self, tensor, dim = 1):
-        return torch.sum(torch.pow(tensor), dim = dim)
+    def sq_norm(self, tensor, dim = -1):
+        return torch.sum(torch.pow(tensor, 2), dim = dim)
 
     def make_observation_and_reward(self, actions):
         root_quat = self.env.get_rotation() # (num_envs, 4)
@@ -117,7 +118,7 @@ class ConcurrentTrainingEnv(VecEnv):
             reward = self.make_reward(root_quat, root_ang_vel, joint_pos, joint_vel, des_jpos_t1, des_jpos_t2, Q_err_hist, Q_vel_hist, relative_feet_pos, command, root_lin_vel, foot_height, contact_probs, actions)
 
         obs_list = [root_quat, root_ang_vel, joint_pos, joint_vel, des_jpos_t1, des_jpos_t2, Q_err_hist, Q_vel_hist, relative_feet_pos, command, root_lin_vel, foot_height, contact_probs]
-        obs = torch.cat(obs_list, dim = 1) # (num_envs, 150)
+        obs = torch.cat(obs_list, dim = 1) # (num_envs, 153)
 
         return obs, reward
         
@@ -129,7 +130,7 @@ class ConcurrentTrainingEnv(VecEnv):
         tmax = torch.maximum(self.touchdown_time, self.takeoff_time)
         r_air = G.k_a * torch.clamp(tmax, max = 0.2) * (tmax < 0.25)
 
-        feet_vel = self.env.get_rb_linear_velocity()[:, self.feet_idx, [0, 1]]
+        feet_vel = self.env.get_rb_linear_velocity()[:, self.feet_idx, :][:, :, [0, 1]]
         r_slip = G.k_slip * contact_probs * self.sq_norm(feet_vel)
 
         sqrt_vel = torch.sqrt(torch.linalg.norm(feet_vel, dim = -1))
@@ -163,7 +164,6 @@ class ConcurrentTrainingEnv(VecEnv):
 
         return term, trunc
 
-
     def update_feet_states(self):
         feet_contacts = self.env.get_contact_states()[:, self.feet_idx]
         self.takeoff_time[feet_contacts] += self.dt
@@ -172,10 +172,7 @@ class ConcurrentTrainingEnv(VecEnv):
         self.takeoff_time[~feet_contacts] = 0
         self.touchdown_time[~feet_contacts] += self.dt
 
-    def reset(self, env_idx = None):
-        if env_idx is None:
-            env_idx = self.all_envs
-        
+    def reset_partial(self, env_idx):
         self.takeoff_time[env_idx] = 0
         self.touchdown_time[env_idx] = 0
         self.ep_lens[env_idx] = 0
@@ -184,18 +181,20 @@ class ConcurrentTrainingEnv(VecEnv):
         self.des_joint_pos_hist.reset(env_idx)
         self.joint_pos_err_hist.reset(env_idx)
         self.joint_vel_hist.reset(env_idx)
-
+        
         self.env.reset(env_idx)
 
         obs, _ = self.make_observation_and_reward(None)
         return obs[env_idx]
+
+    def reset(self):
+        return self.reset_partial(self.all_envs)
 
     def step(self, actions):
         self.prev_joint_pos[:] = self.env.get_joint_position()
 
         actions = actions * G.action_scale + self.default_dof_pos
         self.env.step(actions)
-
         self.update_feet_states()
 
         new_obs, reward = self.make_observation_and_reward(actions)
@@ -216,11 +215,12 @@ class ConcurrentTrainingEnv(VecEnv):
         for term_idx in torch.where(term)[0]:
             reward[term_idx] = -10
             reset_idx.add(term_idx.item())
+        reset_idx = list(reset_idx)
 
         if len(reset_idx) > 0:
-            new_obs[reset_idx, :] = self.reset(reset_idx)
+            new_obs[reset_idx, :] = self.reset_partial(reset_idx)
 
-        infos = [{} for _ in range(self.ctx.num_envs)]
+        infos = [{} for _ in range(self.num_envs)]
         return new_obs, reward, torch.logical_or(term, trunc), infos       
 
     def render(self):
