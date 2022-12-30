@@ -5,7 +5,7 @@ from rlloco.robots.common.kinematics.inv_kin_algs import dls_invkin
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 def get_home_position():
-    return torch.tensor([0, -0.8, 1.6, 0, -0.8, 1.6, 0, -0.8, 1.6, 0, -0.8, 1.6]).cuda()
+    return torch.tensor([0, -0.8, 1.6, 0, -0.8, 1.6, 0, -0.8, 1.6, 0, -0.8, 1.6]).to(device)
 
 
 def invert_ht(ht):
@@ -150,7 +150,7 @@ def build_jacobian_and_fk(q_vec, leg):
     # stack the gradients to get the jacobian
     jacobian = torch.stack((hip_g, shoulder_g, knee_g), dim=2)
 
-    return jacobian.cuda(), torso_to_foot[:, :3, 3].cuda()
+    return jacobian.to(device), torso_to_foot[:, :3, 3].to(device)
 
 
 def build_jacobian_and_fk_all_feet(q_vec):

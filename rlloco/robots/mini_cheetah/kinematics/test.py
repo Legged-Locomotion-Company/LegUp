@@ -2,6 +2,8 @@ import torch
 
 from mini_cheetah_kin_torch import get_home_position, mini_cheetah_dls_invkin, build_jacobian_and_fk_all_feet
 
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
 def test_mc_dls():
     """Tests the mini_cheetah_dls_invkin function.
 
@@ -10,7 +12,7 @@ def test_mc_dls():
     """
 
     home_pos = get_home_position.reshape(1,-1)
-    q = home_pos + torch.randn_like(home_pos).cuda()*2
+    q = home_pos + torch.randn_like(home_pos).to(device)*2
 
     goals = build_jacobian_and_fk_all_feet(home_pos).reshape(-1, 12)
 

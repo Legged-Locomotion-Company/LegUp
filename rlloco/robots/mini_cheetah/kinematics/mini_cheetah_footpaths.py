@@ -2,6 +2,7 @@ import torch
 
 from rlloco.robots.mini_cheetah.kinematics.mini_cheetah_kin_torch import mini_cheetah_dls_invkin
 
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 def walk_half_circle_line(q_vec, pos_phase_deltas, phase):
     """This function takes the robot positions, desired foot deltas and theta deltas, and returns the desired foot position along the half_circle_line profile with a walk gait.
@@ -37,7 +38,7 @@ def use_gait_footpath(q_vec, pos_phase_deltas, phase, path_func, phase_offsets):
     pos_deltas, phase_deltas = torch.split(pos_phase_deltas, (12,4), dim=-1)
     per_foot_pos_deltas = torch.reshape(pos_deltas, (-1, 4, 3))
 
-    phases = phase_deltas + phase.tile(4,1).T + phase_offsets.cuda()
+    phases = phase_deltas + phase.tile(4,1).T + phase_offsets.to(device)
     goal_positions = path_func(phases) + per_foot_pos_deltas
 
     # print(f"path[0]: {path_func(phases)[0]}")
@@ -67,10 +68,10 @@ def half_circle_line(phase):
 
     phase = torch.remainder(phase, torch.pi*2)
 
-    result = torch.zeros((NUM_ENVS, 4, 3)).cuda()
+    result = torch.zeros((NUM_ENVS, 4, 3)).to(device)
 
     result[:,:,0] = torch.cos(phase) * x_amp
-    result[:,:,1] = torch.zeros_like(phase).cuda()
+    result[:,:,1] = torch.zeros_like(phase).to(device)
     result[:,:,2] = torch.sin(phase) * z_amp
 
     mask = phase > torch.pi
