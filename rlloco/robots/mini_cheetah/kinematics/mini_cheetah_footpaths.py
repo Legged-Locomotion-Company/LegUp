@@ -1,6 +1,6 @@
 import torch
-# import robots.kinematics.dumb_dumb_dummy.stupid_torch_kin
-from LegUp.robots.Mini_Cheetah.kinematics.mini_cheetah_kin_torch import mini_cheetah_dls_invkin
+
+from rlloco.robots.mini_cheetah.kinematics.mini_cheetah_kin_torch import mini_cheetah_dls_invkin
 
 
 def walk_half_circle_line(q_vec, pos_phase_deltas, phase):

@@ -2,6 +2,8 @@ import torch
 
 from rlloco.robots.common.kinematics.inv_kin_algs import dls_invkin
 
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
 def get_home_position():
     return torch.tensor([0, -0.8, 1.6, 0, -0.8, 1.6, 0, -0.8, 1.6, 0, -0.8, 1.6]).cuda()
 
@@ -10,7 +12,7 @@ def invert_ht(ht):
     """Inverts a 3d 4x4 homogenous transform. Using this function is a lot better because it does not need the iterative algorithm that is used in regular matrix inversion.
 
     Args:
-        ht (torch.Tensor): THe homogenous transform
+        ht (torch.Tensor): The homogenous transform
 
     Returns:
         torch.Tensor: returns the inverted homogenous transform. Will be equail to torch.invert(ht)
@@ -50,6 +52,24 @@ def yrot(theta):
 
     return result
 
+def translation_ht(x, y, z):
+    pos = torch.tensor([x, y, z], device= device)
+
+def translation_ht(position: torch.Tensor):
+    """Instantiates a new 4x4 homogenous transform tensor which is a pure
+
+    Args:
+        pos (torch.Tensor): a (3) vec with (x,y,z) coords for the position to make in the ht
+
+    Returns:
+        torch.Tensor: a (4x4) tensor homogenous transform 
+    """
+
+    ht = torch.eye(4, device= device)
+    ht[0,0:3] = position
+
+    return ht
+
 
 def build_jacobian_and_fk(q_vec, leg):
     # create the multipliers depending on the leg
@@ -66,26 +86,29 @@ def build_jacobian_and_fk(q_vec, leg):
         [0, 0, 0, 1]
     ], dtype=torch.float32).repeat(NUM_ENVS, 1, 1)
     # [0.055, -0.019, 0]
-    hip_to_shoulder = xrot(q_vec[:, 3*leg + 0]) @ torch.tensor([
-        [1, 0, 0, 0.055 * front],
-        [0, 1, 0, 0.019 * left],
-        [0, 0, 1, 0],
-        [0, 0, 0, 1]
-    ])#, dtype=mishas_favorite_dtype)
+    hip_to_shoulder = xrot(q_vec[:, 3*leg + 0]) @ translation_ht(0.55*front, 0.19*left, 0)
+    # hip_to_shoulder = xrot(q_vec[:, 3*leg + 0]) @ torch.tensor([
+    #     [1, 0, 0, 0.055 * front],
+    #     [0, 1, 0, 0.019 * left],
+    #     [0, 0, 1, 0],
+    #     [0, 0, 0, 1]
+    # ])
     # [0, -0.049, -0.2085]
-    shoulder_to_knee = yrot(q_vec[:, 3*leg + 1]) @ torch.tensor([
-        [1, 0, 0, 0],
-        [0, 1, 0, 0.049 * left],
-        [0, 0, 1, -0.2085],
-        [0, 0, 0, 1]
-    ])#, dtype=mishas_favorite_dtype)
+    shoulder_to_knee = yrot(q_vec[:, 3*leg + 1]) @ translation_ht(0, 0.49*left, -0.2085)
+    # shoulder_to_knee = yrot(q_vec[:, 3*leg + 1]) @ torch.tensor([
+    #     [1, 0, 0, 0],
+    #     [0, 1, 0, 0.049 * left],
+    #     [0, 0, 1, -0.2085],
+    #     [0, 0, 0, 1]
+    # ])
     # [0, 0, -0.194]
-    knee_to_foot = yrot(q_vec[:, 3*leg + 2]) @ torch.tensor([
-        [1, 0, 0, 0],
-        [0, 1, 0, 0],
-        [0, 0, 1, -0.194],
-        [0, 0, 0, 1]
-    ])#, dtype=mishas_favorite_dtype)
+    knee_to_foot = yrot(q_vec[:, 3*leg + 2]) @ translation_ht(0, 0, -1.94)
+    # knee_to_foot = yrot(q_vec[:, 3*leg + 2]) @ torch.tensor([
+    #     [1, 0, 0, 0],
+    #     [0, 1, 0, 0],
+    #     [0, 0, 1, -0.194],
+    #     [0, 0, 0, 1]
+    # ])
 
     # create the axes
     hip_axis = torch.tensor(
@@ -106,7 +129,7 @@ def build_jacobian_and_fk(q_vec, leg):
     knee_to_torso = invert_ht(shoulder_to_knee) @ shoulder_to_torso
 
     # cross the axes to get local gradients
-    local_hip_g = torch.ones((len(q_vec), 4))
+    local_hip_g = torch.one((len(q_vec), 4))
     local_shoulder_g = torch.ones((len(q_vec), 4))
     local_knee_g = torch.ones((len(q_vec), 4))
 
