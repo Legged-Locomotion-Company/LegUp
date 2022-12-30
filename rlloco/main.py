@@ -121,7 +121,6 @@ class GPUVecEnv(ConcurrentTrainingEnv):
 
 
 def train_ppo():
-    print(f"CWD: {os.getcwd()}")
     env = GPUVecEnv(PARALLEL_ENVS, f"{os.getcwd()}/rlloco/robots/mini-cheetah/physical_models", "mini-cheetah.urdf")
     cb = CustomCallback(env)
 
