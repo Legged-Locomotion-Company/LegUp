@@ -1,7 +1,8 @@
 import torch
 
-x = torch.rand(20)
-y = torch.rand(20)
+x = torch.rand(20).unsqueeze(1)
+y = torch.rand(20, 3)
+print(x.shape)
 
 # dot product of x and y across dim 1
 # xy = torch.sum(x * y, dim=1)

@@ -14,8 +14,8 @@ def lin_velocity(v_des: torch.Tensor, v_act: torch.Tensor):
 
 
     Args:
-        v_des (torch.Tensor): Desired X,Y,Z velocity of shape (num_envs, 3)
-        v_act (torch.Tensor): Actual  X,Y,Z velocity of shape (num_envs, 3)
+        v_des (torch.Tensor): Desired X,Y velocity of shape (num_envs, 2)
+        v_act (torch.Tensor): Actual  X,Y velocity of shape (num_envs, 2)
 
     Returns:
         torch.Tensor: the reward for each env of shape (num_envs,)
@@ -62,78 +62,131 @@ def ang_velocity(w_des_yaw, w_act_yaw):
     return x
 
 
-'''
-Calculates the linear orthogonal velocity given:
-v_des: desired velocity 
-v_act: actual velocity
-'''
+def linear_ortho_velocity(v_des: torch.Tensor, v_act: torch.Tensor) -> torch.Tensor:
+    """
+    This term penalizes the velocity orthogonal to the target direction 
+    Reward is exp(-3 * norm(v_0)^2), where v_0 is v_act-(dot(v_des,v_act))*v_des
+
+    Args:
+        v_des (torch.Tensor): Desired X,Y,Z velocity of shape (num_envs, 3)
+        v_act (torch.Tensor): Actual  X,Y,Z velocity of shape (num_envs, 3)
+
+    Returns:
+        torch.Tensor: the reward for each env of shape (num_envs,)
+    """
+    dot_v_des_v_act = torch.sum(
+        v_des * v_act, dim=1).unsqueeze(1)  # (num_envs,1)
+    v_0 = v_act - dot_v_des_v_act * v_des  # (num_envs,3)
+    return torch.exp(-3 * squared_norm(v_0))
 
 
-def linear_ortho_velocity(v_des, v_act):
-    return torch.exp(-3 * torch.pow(torch.norm(v_act-(v_des*v_act)*v_des, dim=1), 2))
+def body_motion(v_z: torch.Tensor, w_x: torch.Tensor, w_y: torch.Tensor) -> torch.Tensor:
+    """This term penalizes the body velocity in directions not part of the command\n
+    Reward is -1.25*v_z^2 - 0.4 * abs(w_x) - 0.4 * abs(w_y)
+
+    Args:
+        v_z (torch.Tensor): Velocity in the z direction of shape (num_envs, 1)
+        w_x (torch.Tensor): Angular velocity in the x direction of shape (num_envs, 1)
+        w_y (torch.Tensor): Angular velocity in the y direction of shape (num_envs, 1)
+
+    Returns:
+        torch.Tensor: the reward for each env of shape (num_envs,)
+    """
+    return (-1.25*torch.pow(v_z, 2) - 0.4 * torch.abs(w_x) - 0.4 * torch.abs(w_y)).squeeze()
 
 
-'''
-Calculates the motion of the body velocity which is not part of the command
-v_z: velocity in the z direction
-w_x: omega in the x direction
-w_y: omega in the y direction
-'''
+def foot_clearance(h: torch.Tensor) -> torch.Tensor:
+    """Penalizes the model if the foot is more than 0.2 meters above the ground, with a reward of -1 per foot that is not in compliance.
+
+    Args:
+        h (torch.Tensor): Sampled heights around each foot of shape (num_envs, num_feet, num_heights_per_foot). 
+
+    Returns:
+        torch.Tensor: the reward for each env of shape (num_envs,)
+    """
+    return torch.sum(-1 * (torch.max(h, dim=2)[0].squeeze() < -0.2), dim=1)
 
 
-def body_motion(v_z, w_x, w_y):
-    return -1.25*v_z**2 - 0.4 * torch.abs(w_x) - 0.4 * torch.abs(w_y)
+def shank_or_knee_col(is_col: torch.Tensor, curriculum_factor: float) -> torch.Tensor:
+    """If any of the shanks or knees are in contact with the ground, the reward is -curriculum_factor
+
+    Args:
+        is_col (torch.Tensor): tensor of shape (num_envs, num_shank_and_knee) indicating whether each shank or knee is in contact with the ground
+        curriculum_factor (float): the curriculum factor that increases monotonically and converges to 1
+
+    Returns:
+        torch.Tensor: the reward for each env of shape (num_envs,)
+    """
+    return -curriculum_factor * torch.any(is_col, dim=1)
 
 
-'''
-Calculates the foot clearance
-h: height of requested foot clearance, (num_envs, 4, num_heights_per_foot)
-'''
+def joint_motion(j_vel:  torch.Tensor, j_vel_t_1: torch.Tensor, dt: float, curriculum_factor: float) -> torch.Tensor:
+    """This term penalizes the joint velocity and acceleration to avoid vibrations
+
+    Args:
+        j_vel (torch.Tensor): Joint velocity of shape (num_envs, num_joints)
+        j_vel_t_1 (torch.Tensor): Joint velocity at previous time step of shape (num_envs, num_joints)
+        dt (float): change in time since previous time step
+        curriculum_factor (float): the curriculum factor that increases monotonically and converges to 1
+
+    Returns:
+        torch.Tensor: the reward for each env of shape (num_envs,)
+    """
+    accel = (j_vel - j_vel_t_1)/dt
+    return -curriculum_factor * torch.sum(0.01*(j_vel)**2 + accel**2, dim=1)
 
 
-def foot_clearance(h):
-    return (torch.max(h, dim=1)[0] < -0.2).to(torch.long).to(device)
+def joint_contraint(q: torch.Tensor, q_th: torch.Tensor) -> torch.Tensor:
+    """This term penalizes the joint position if it is outside of the joint limits. We only set a threshold for the knee joints.
 
+    Args:
+        q (torch.Tensor): Joint position of shape (num_envs, num_joints)
+        q_th (torch.Tensor): Joint position threshold of shape (num_envs, num_joints)
 
-def shank_or_knee_col(is_col):
-    return -self.curriculum_factor * torch.any(is_col, dim=1)
-
-
-def joint_motion(j_vel, j_vel_t_1):
-    accel = (j_vel - j_vel_t_1)/self.dt
-    self.prev_joint_vel = j_vel
-    return -self.curriculum_factor * torch.sum(0.01*(j_vel)**2 + accel**2, dim=1)
-
-# q = joint positions
-# q_th = joint position thresholds
-
-
-def joint_contraint(q, q_th):
+    Returns:
+        torch.Tensor: the reward for each env of shape (num_envs,)
+    """
     mask = q > q_th
     return torch.sum(-torch.pow(q-q_th, 2) * mask, dim=1)
 
-# q_t_des  = joint position desired
-# q_t_1_des = joint position desired at previous time step
+
+def target_smoothness(joint_t_des: torch.Tensor, joint_t_1_des: torch.Tensor, joint_t_2_des: torch.Tensor, curriculum_factor: float) -> torch.Tensor:
+    """This term penalizes the smoothness of the target foot trajectories
+
+    Args:
+        joint_t_des (torch.Tensor): Current joint target position of shape (num_envs, num_joints)
+        joint_t_1_des (torch.Tensor): Joint target position at previous time step of shape (num_envs, num_joints)
+        joint_t_2_des (torch.Tensor): Joint target position two time steps ago of shape (num_envs, num_joints)
+        curriculum_factor float: the curriculum factor that increases monotonically and converges to 1
+
+    Returns:
+        torch.Tensor: the reward for each env of shape (num_envs,)
+    """
+    return -curriculum_factor * torch.sum((joint_t_des - joint_t_1_des)**2 + (joint_t_des - 2*joint_t_1_des + joint_t_2_des)**2, dim=1)
 
 
-def target_smoothness(q_t_des, q_t_1_des, q_t_2_des):
-    # self.prev_q_des = torch.cat(
-    #    (self.prev_q_des[:, 1].reshape(self.num_envs, 12, 1), q_t_des), dim=2)
+def torque_reward(tau: torch.Tensor, curriculum_factor: float) -> torch.Tensor:
+    """This term penalizes the torque to reduce energy consumption
 
-    # self.prev_q_des[:, :, 1] = self.prev_q_des[:, :, 0]
-    #self.prev_q_des[:, :, 0] = self.env.get_joint_position()
-    return -self.curriculum_factor * torch.sum((q_t_des - q_t_1_des)**2 + (q_t_des - 2*q_t_1_des + q_t_2_des)**2, dim=1)
+    Args:
+        tau (torch.Tensor): Joint torque of shape (num_envs, num_joints)
+        curriculum_factor (float): the curriculum factor that increases monotonically and converges to 1
 
-
-def torque_reward(tau):
-    return -self.curriculum_factor * torch.sum(tau**2, dim=1)
-
-
-'''
-foot in contact = truthy array
-feet_vel = feet velocity
-'''
+    Returns:
+        torch.Tensor: the reward for each env of shape (num_envs,)
+    """
+    return -curriculum_factor * torch.sum(tau**2, dim=1)
 
 
-def slip(foot_is_in_contact, feet_vel):
-    return -self.curriculum_factor * torch.sum((foot_is_in_contact * feet_vel)**2, dim=1)
+def slip(foot_is_in_contact: torch.Tensor, feet_vel: torch.Tensor, curriculum_factor: float) -> torch.Tensor:
+    """We penealize the foot velocity if the foot is in contact with the ground to reduce slippage
+
+    Args:
+        foot_is_in_contact (torch.Tensor): boolean tensor of shape (num_envs, num_feet) indicating whether each foot is in contact with the ground
+        feet_vel (torch.Tensor): Foot velocity of shape (num_envs, num_feet, 3)
+        curriculum_factor (float): the curriculum factor that increases monotonically and converges to 1
+
+    Returns:
+        torch.Tensor: the reward for each env of shape (num_envs,)
+    """
+    return -curriculum_factor * torch.sum((foot_is_in_contact * squared_norm(feet_vel)), dim=1)
