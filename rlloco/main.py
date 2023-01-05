@@ -1,10 +1,8 @@
-from isaacgym import gymapi, gymtorch
 from rlloco.agents.concurrent_training import ConcurrentTrainingEnv
 
 import torch
 import os
 from stable_baselines3 import PPO
-from stable_baselines3.common.vec_env import VecEnv
 from stable_baselines3.common.callbacks import BaseCallback
 
 import cv2
@@ -103,7 +101,8 @@ DISCOUNT = 0.996
 
 CLIP_RANGE = 0.2
 
-class GPUVecEnv(ConcurrentTrainingEnv):
+# Wrapper for ConcurrentTrainingEnv to convert returned torch tensors to numpy and input numpy arrays to torch tensors
+class GPUVecEnv(ConcurrentTrainingEnv): # TODO: generalize it to not just the `ConcurrentTrainingEnv` environment
     def step(self, actions):
         actions = torch.from_numpy(actions).cuda()
 
@@ -119,9 +118,9 @@ class GPUVecEnv(ConcurrentTrainingEnv):
         obs = super().reset()
         return obs.cpu().detach().numpy()
 
-
+# Trains the agent using PPO from stable_baselines3. Tensorboard logging to './concurrent_training_tb' and saves model to ConcurrentTrainingEnv
 def train_ppo():
-    env = GPUVecEnv(PARALLEL_ENVS, f"{os.getcwd()}/rlloco/robots/mini-cheetah/physical_models", "mini-cheetah.urdf")
+    env = GPUVecEnv(PARALLEL_ENVS, f"{os.getcwd()}/robots/mini_cheetah/physical_models", "mini-cheetah.urdf")    
     cb = CustomCallback(env)
 
     model = PPO('MlpPolicy', env, tensorboard_log = './concurrent_training_tb', verbose = 2, policy_kwargs = {'net_arch': [512, 256, 64]}, 
@@ -130,8 +129,9 @@ def train_ppo():
     model.learn(total_timesteps = TOTAL_TIMESTEPS, callback = cb)
     model.save('ConcurrentTrainingEnv')
 
+# Runs the agent based on a saved model
 def eval_ppo():
-    env = GPUVecEnv(PARALLEL_ENVS, f"{os.getcwd()}/rlloco/robots/mini-cheetah/physical_models", "mini-cheetah.urdf")
+    env = GPUVecEnv(PARALLEL_ENVS, f"{os.getcwd()}/robots/mini_cheetah/physical_models", "mini-cheetah.urdf")
     model = PPO.load('ConcurrentTrainingEnv')
 
     obs = env.reset()

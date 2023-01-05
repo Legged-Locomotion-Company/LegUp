@@ -1,5 +1,7 @@
 from isaacgym import gymapi, gymtorch
 
+from typing import List
+
 import torch
 import numpy as np
 import pytorch3d.transforms.rotation_conversions as R
@@ -11,7 +13,7 @@ class IsaacGymEnvironment:
     This implementation creates a number of parallel environments, and adds one agent/robot to each environment.
     """
 
-    def __init__(self, num_environments, use_cuda, asset_root, asset_path, default_dof_pos):
+    def __init__(self, num_environments: int, use_cuda: bool, asset_root: str, asset_path: str, default_dof_pos: torch.Tensor):
         """
         Args:
             num_environments (int): number of parallel environments to create in simulator
@@ -38,7 +40,7 @@ class IsaacGymEnvironment:
         self._refresh()
         self._init_camera(640, 480)
     
-    def _init_camera(self, width, height):
+    def _init_camera(self, width: int, height):
         """Creates a camera object in the simulator so that it can be visualized in headless mode
 
         Args:
@@ -97,11 +99,8 @@ class IsaacGymEnvironment:
         self.gym.refresh_dof_state_tensor(self.sim)
         self.gym.refresh_rigid_body_state_tensor(self.sim)
         self.gym.refresh_net_contact_force_tensor(self.sim)
-    
-    '''
-    Getters for different robot properties
-    '''
-    def get_position(self):
+
+    def get_position(self) -> torch.Tensor:
         """Gets the root position of each robot
 
         Returns:
@@ -109,7 +108,7 @@ class IsaacGymEnvironment:
         """
         return self.root_position
 
-    def get_rotation(self):
+    def get_rotation(self) -> torch.Tensor:
         """Gets the root rotation (as quaternion) of each robot
 
         Returns:
@@ -117,7 +116,7 @@ class IsaacGymEnvironment:
         """
         return self.root_rotation
 
-    def get_linear_velocity(self):
+    def get_linear_velocity(self) -> torch.Tensor:
         """Gets the root linear velocity of each robot
 
         Returns:
@@ -125,7 +124,7 @@ class IsaacGymEnvironment:
         """
         return self.root_lin_vel
 
-    def get_angular_velocity(self):
+    def get_angular_velocity(self) -> torch.Tensor:
         """Gets the root angular velocity of each robot
 
         Returns:
@@ -133,7 +132,7 @@ class IsaacGymEnvironment:
         """
         return self.root_ang_vel
 
-    def get_joint_position(self):
+    def get_joint_position(self) -> torch.Tensor:
         """Gets the joint positions of each robot
 
         Returns:
@@ -141,7 +140,7 @@ class IsaacGymEnvironment:
         """
         return self.dof_pos
 
-    def get_joint_velocity(self):
+    def get_joint_velocity(self) -> torch.Tensor:
         """Gets the joint velocities of each robot
 
         Returns:
@@ -149,7 +148,7 @@ class IsaacGymEnvironment:
         """
         return self.dof_vel
 
-    def get_joint_torque(self):
+    def get_joint_torque(self) -> torch.Tensor:
         """Gets the joint torques of each robot
 
         Returns:
@@ -157,7 +156,7 @@ class IsaacGymEnvironment:
         """
         return self.dof_forces
 
-    def get_rb_position(self):
+    def get_rb_position(self) -> torch.Tensor:
         """Gets the rigid body positions of each robot
 
         Returns:
@@ -165,7 +164,7 @@ class IsaacGymEnvironment:
         """
         return self.rb_pos
 
-    def get_rb_rotation(self):
+    def get_rb_rotation(self) -> torch.Tensor:
         """Gets the rigid body rotations (as quaternion) of each robot
 
         Returns:
@@ -173,7 +172,7 @@ class IsaacGymEnvironment:
         """
         return self.rb_rot
 
-    def get_rb_linear_velocity(self):
+    def get_rb_linear_velocity(self) -> torch.Tensor:
         """Gets the rigid body linear velocities of each robot
 
         Returns:
@@ -181,7 +180,7 @@ class IsaacGymEnvironment:
         """
         return self.rb_lin_vel
 
-    def get_rb_angular_velocity(self):
+    def get_rb_angular_velocity(self) -> torch.Tensor:
         """Gets the rigid body angular velocities of each robot
 
         Returns:
@@ -189,7 +188,7 @@ class IsaacGymEnvironment:
         """
         return self.rb_ang_vel
 
-    def get_contact_states(self, collision_thresh=1):
+    def get_contact_states(self, collision_thresh: float = 1) -> torch.Tensor:
         """Gets whether or not each rigid body has collided with anything
 
         Args:
@@ -202,7 +201,7 @@ class IsaacGymEnvironment:
         collisions = contact_forces > collision_thresh
         return collisions
 
-    def get_contact_forces(self):
+    def get_contact_forces(self) -> torch.Tensor:
         """Gets the contact forces action on each rigid body
 
         Returns:
@@ -210,10 +209,7 @@ class IsaacGymEnvironment:
         """
         return self.net_contact_forces
 
-    '''
-    MDP support
-    '''
-    def step(self, actions = None):
+    def step(self, actions: torch.Tensor = None):
         """Moves robots using `actions`, steps the simulation forward, updates graphics, and refreshes state tensors
 
         Args:
@@ -233,7 +229,7 @@ class IsaacGymEnvironment:
 
         self._refresh()
     
-    def render(self):
+    def render(self) -> torch.Tensor:
         """Gets an image of the environment from the camera and returns it
 
         Returns:
@@ -241,7 +237,7 @@ class IsaacGymEnvironment:
         """
         return self.gym.get_camera_image(self.sim, self.env_actor_handles[0][0], self.camera_handle, gymapi.IMAGE_COLOR).reshape(self.cam_height, self.cam_width, 4)
     
-    def reset(self, env_index = None):
+    def reset(self, env_index: List[int] = None):
         """Resets the specified robot. Specifically, it will move it to a random position, give it zero velocity, and drop it from a height of 0.35 meters.
 
         Args:
