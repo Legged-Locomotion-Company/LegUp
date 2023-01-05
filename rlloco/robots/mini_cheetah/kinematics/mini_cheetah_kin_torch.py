@@ -43,9 +43,9 @@ def build_jacobian_and_fk(q_vec, leg):
     torso_to_foot_zero = invert_ht(foot_to_torso_zero)
 
     # create rotation axes
-    hip_ax = torch.tensor([1., 0., 0.], device=device)
-    shoulder_ax = torch.tensor([0., 1., 0.], device=device)
-    knee_ax = torch.tensor([0., 1., 0.], device=device)
+    hip_ax = torch.tensor([front * 1., 0., 0.], device=device)
+    shoulder_ax = torch.tensor([0., left * 1., 0.], device=device)
+    knee_ax = torch.tensor([0., left * 1., 0.], device=device)
 
     # create the screw axes
     hip_screw_b = screw_axis(hip_ax, foot_to_hip_zero[:3, 3])
@@ -112,7 +112,7 @@ def use_ik(q_vec, goals, ik_alg):
     """
 
     # Here we dissect the goals tensor to create a (NUM_ENVS x 4 x 3) vector which contains the joint targets for each of the robots 4 feet separately
-    goals_per_foot = torch.reshape(goals, (-1, 4, 3))
+    goals_per_foot = goals.reshape(-1, 4, 3)
 
     # Here we find the foot errors and the jacobian
 
@@ -122,7 +122,8 @@ def use_ik(q_vec, goals, ik_alg):
     relative_foot_pos = absolute_foot_pos - home_pos
     error = goals_per_foot - relative_foot_pos
 
-    per_foot_errors = ik_alg(jacobian[:, :, :3], error)
+    per_foot_errors = ik_alg(
+        jacobian[:, :, 3:].reshape(-1, 3, 3), error.reshape(-1, 3))
 
     return q_vec + per_foot_errors.reshape((-1, 12))
 

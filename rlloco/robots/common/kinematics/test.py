@@ -48,7 +48,7 @@ def test_dls():
         """Forward kinematics for a very simple 2R robot.
 
         Args:
-            q (torch.Tensor): 2x1 joint angles.
+            q (torch.Tensor): (NUM_ENVS x 2 x 1) joint angles.
             params (dict): Dictionary of parameters.
 
         Returns:
@@ -57,8 +57,10 @@ def test_dls():
 
         l1, l2 = params['l1'], params['l2']
 
-        x = l1 * torch.cos(q[0]) + l2 * torch.cos(q[0] + q[1])
-        y = l1 * torch.sin(q[0]) + l2 * torch.sin(q[0] + q[1])
+        j1_angles, j2_angles = q[:, 0], q[:, 1]
+
+        x = l1 * torch.cos(j1_angles) + l2 * torch.cos(j1_angles + j2_angles)
+        y = l1 * torch.sin(j1_angles) + l2 * torch.sin(j1_angles + j2_angles)
 
         return torch.stack([x, y], dim=1)
 
@@ -79,27 +81,28 @@ def test_dls():
 
         jacobian = torch.zeros((NUM_ENVS, 2, 2), device=device)
 
-        jacobian[:,0,0] = -l1 * torch.sin(q[:,0]) - l2 * torch.sin(q[:,0] + q[:,1])
-        jacobian[:,0,1] = -l2 * torch.sin(q[:,0] + q[:,1])
-        jacobian[:,1,0] = l1 * torch.cos(q[:,0]) + l2 * torch.cos(q[:,0] + q[:,1])
-        jacobian[:,1,1] = l2 * torch.cos(q[:,0] + q[:,1])
+        jacobian[:, 0, 0] = -l1 * \
+            torch.sin(q[:, 0]) - l2 * torch.sin(q[:, 0] + q[:, 1])
+        jacobian[:, 0, 1] = -l2 * torch.sin(q[:, 0] + q[:, 1])
+        jacobian[:, 1, 0] = l1 * \
+            torch.cos(q[:, 0]) + l2 * torch.cos(q[:, 0] + q[:, 1])
+        jacobian[:, 1, 1] = l2 * torch.cos(q[:, 0] + q[:, 1])
 
         return jacobian
 
     params = {'l1': 1., 'l2': 1.}
 
-    target = torch.tensor([-1., 0.], device=device)
+    target = torch.tensor([-0.5, -0.5], device=device)
 
     q = torch.tensor([[0, 0], [0.5, 0.5]], device=device)
 
     for _ in range(100):
         J = test_robot_j(q, params)
         fk = test_robot_fk(q, params)
-        e = fk
+        e = target - fk
         q += dls_invkin(J, e, 0.1)
 
     return test_robot_fk(q, params).allclose(target)
-
 
 
 if __name__ == '__main__':
@@ -120,7 +123,7 @@ if __name__ == '__main__':
         print("screw_to_ht PASSED!")
     else:
         print("screw_to_ht FAILED :(")
-    
+
     print("TESTING dls")
     if test_dls():
         print("dls PASSED!")
