@@ -1,5 +1,7 @@
 from isaacgym import gymapi, gymtorch
 
+from typing import List
+
 import torch
 import numpy as np
 import pytorch3d.transforms.rotation_conversions as R
@@ -7,7 +9,19 @@ import pytorch3d.transforms.rotation_conversions as R
 from rlloco.isaac.simulator import SimulatorContext
 
 class IsaacGymEnvironment:
-    def __init__(self, num_environments, use_cuda, asset_root, asset_path, default_dof_pos):
+    """Interfaces with IsaacGym to handle all of the simulation, and provides an API to get simulation properties and move the robot.
+    This implementation creates a number of parallel environments, and adds one agent/robot to each environment.
+    """
+
+    def __init__(self, num_environments: int, use_cuda: bool, asset_root: str, asset_path: str, default_dof_pos: torch.Tensor):
+        """
+        Args:
+            num_environments (int): number of parallel environments to create in simulator
+            use_cuda (bool): whether or not to use the GPU pipeline
+            asset_root (str): root folder where the URDF to load is
+            asset_path (str): path to URDF file from `asset_root`
+            default_dof_pos (torch.Tensor): Joint positions to set for all robots when they are initialized or reset
+        """
         self.ctx = SimulatorContext(num_environments, use_cuda, asset_root, asset_path)
         self.num_environments = num_environments
         self.gym = self.ctx.gym
@@ -26,7 +40,13 @@ class IsaacGymEnvironment:
         self._refresh()
         self._init_camera(640, 480)
     
-    def _init_camera(self, width, height):
+    def _init_camera(self, width: int, height):
+        """Creates a camera object in the simulator so that it can be visualized in headless mode
+
+        Args:
+            width (int): Width (in pixels) of camera
+            height (int): Height (in pixels) of camera
+        """
         camera_props = gymapi.CameraProperties()
         camera_props.width = width
         camera_props.height = height
@@ -42,6 +62,9 @@ class IsaacGymEnvironment:
         self.cam_height = height
 
     def _acquire_state_tensors(self):
+        """Acquires the tensors that contain all of the robot's physical properties (dynamics), and creates
+        several views to make reading/writing easier
+        """
         _root_states = self.gym.acquire_actor_root_state_tensor(self.sim)  # (num_actors, (pos + rot + linvel + angvel) = 13)
         self.root_states = gymtorch.wrap_tensor(_root_states).view(self.num_environments, 13)
         self.root_position = self.root_states[:, :3]
@@ -70,60 +93,129 @@ class IsaacGymEnvironment:
         self.num_rb = self.rb_states.shape[1]
 
     def _refresh(self):
+        """Updates the data in the state tensors, must be called after stepping the simulation"""
         self.gym.refresh_actor_root_state_tensor(self.sim)
         self.gym.refresh_dof_force_tensor(self.sim)
         self.gym.refresh_dof_state_tensor(self.sim)
         self.gym.refresh_rigid_body_state_tensor(self.sim)
         self.gym.refresh_net_contact_force_tensor(self.sim)
-    
-    '''
-    Getters for different robot properties
-    '''
-    def get_position(self):
-        return self.root_position  # (num_environments, 3)
 
-    def get_rotation(self):
-        return self.root_rotation  # (num_environments, 4) - quaternion!
+    def get_position(self) -> torch.Tensor:
+        """Gets the root position of each robot
 
-    def get_linear_velocity(self):
-        return self.root_lin_vel  # (num_environments, 3)
+        Returns:
+            torch.Tensor: shape `(num_environments, 3)`
+        """
+        return self.root_position
 
-    def get_angular_velocity(self):
-        return self.root_ang_vel  # (num_environments, 3)
+    def get_rotation(self) -> torch.Tensor:
+        """Gets the root rotation (as quaternion) of each robot
 
-    def get_joint_position(self):
-        return self.dof_pos  # (num_environments, num_dof)
+        Returns:
+            torch.Tensor: shape `(num_environments, 4)`
+        """
+        return self.root_rotation
 
-    def get_joint_velocity(self):
-        return self.dof_vel  # (num_environments, num_dof)
+    def get_linear_velocity(self) -> torch.Tensor:
+        """Gets the root linear velocity of each robot
 
-    def get_joint_torque(self):
-        return self.dof_forces  # (num_environments, num_dof)
+        Returns:
+            torch.Tensor: shape `(num_environments, 3)`
+        """
+        return self.root_lin_vel
 
-    def get_rb_position(self):
-        return self.rb_pos  # (num_environments, num_rb, 3)
+    def get_angular_velocity(self) -> torch.Tensor:
+        """Gets the root angular velocity of each robot
 
-    def get_rb_rotation(self):
-        return self.rb_rot  # (num_environments, num_rb, 4) - quaternion!
+        Returns:
+            torch.Tensor: shape `(num_environments, 3)`
+        """
+        return self.root_ang_vel
 
-    def get_rb_linear_velocity(self):
-        return self.rb_lin_vel  # (num_environments, num_rb, 3)
+    def get_joint_position(self) -> torch.Tensor:
+        """Gets the joint positions of each robot
 
-    def get_rb_angular_velocity(self):
-        return self.rb_ang_vel  # (num_environments, num_rb, 3)
+        Returns:
+            torch.Tensor: shape `(num_environments, num_degrees_of_freedom)`
+        """
+        return self.dof_pos
 
-    def get_contact_states(self, collision_thresh=1):
+    def get_joint_velocity(self) -> torch.Tensor:
+        """Gets the joint velocities of each robot
+
+        Returns:
+            torch.Tensor: shape `(num_environments, num_degrees_of_freedom)`
+        """
+        return self.dof_vel
+
+    def get_joint_torque(self) -> torch.Tensor:
+        """Gets the joint torques of each robot
+
+        Returns:
+            torch.Tensor: shape `(num_environments, num_degrees_of_freedom)`
+        """
+        return self.dof_forces
+
+    def get_rb_position(self) -> torch.Tensor:
+        """Gets the rigid body positions of each robot
+
+        Returns:
+            torch.Tensor: shape `(num_environments, num_rigid_bodies, 3)`
+        """
+        return self.rb_pos
+
+    def get_rb_rotation(self) -> torch.Tensor:
+        """Gets the rigid body rotations (as quaternion) of each robot
+
+        Returns:
+            torch.Tensor: shape `(num_environments, num_rigid_bodies, 4)`
+        """
+        return self.rb_rot
+
+    def get_rb_linear_velocity(self) -> torch.Tensor:
+        """Gets the rigid body linear velocities of each robot
+
+        Returns:
+            torch.Tensor: shape `(num_environments, num_rigid_bodies, 3)`
+        """
+        return self.rb_lin_vel
+
+    def get_rb_angular_velocity(self) -> torch.Tensor:
+        """Gets the rigid body angular velocities of each robot
+
+        Returns:
+            torch.Tensor: shape `(num_environments, num_rigid_bodies, 3)`
+        """
+        return self.rb_ang_vel
+
+    def get_contact_states(self, collision_thresh: float = 1) -> torch.Tensor:
+        """Gets whether or not each rigid body has collided with anything
+
+        Args:
+            collision_thresh (int, optional): Collision force threshold. Defaults to 1.
+
+        Returns:
+            torch.Tensor: truthy tensor, shape `(num_environments, num_rigid_bodies)`
+        """
         contact_forces = torch.norm(self.net_contact_forces, dim=2)
         collisions = contact_forces > collision_thresh
-        return collisions # (num_environments, num_rb)
+        return collisions
 
-    def get_contact_forces(self):
-        return self.net_contact_forces  # (num_environments, num_rb, 3)
+    def get_contact_forces(self) -> torch.Tensor:
+        """Gets the contact forces action on each rigid body
 
-    '''
-    MDP support
-    '''
-    def step(self, actions = None):
+        Returns:
+            torch.Tensor: shape `(num_environments, num_rigid_bodies, 3)`
+        """
+        return self.net_contact_forces
+
+    def step(self, actions: torch.Tensor = None):
+        """Moves robots using `actions`, steps the simulation forward, updates graphics, and refreshes state tensors
+
+        Args:
+            actions (torch.Tensor, optional): target joint positions to command each robot, shape `(num_environments, num_degrees_of_freedom)`. 
+                If none, robots are commanded to the default joint position provided earlier Defaults to None.
+        """
         if actions is not None:
             self.gym.set_dof_position_target_tensor(self.sim, gymtorch.unwrap_tensor(actions))
         else:
@@ -137,10 +229,20 @@ class IsaacGymEnvironment:
 
         self._refresh()
     
-    def render(self):
+    def render(self) -> torch.Tensor:
+        """Gets an image of the environment from the camera and returns it
+
+        Returns:
+            torch.Tensor: RGB image, shape `(camera_height, camera_width, 4)`
+        """
         return self.gym.get_camera_image(self.sim, self.env_actor_handles[0][0], self.camera_handle, gymapi.IMAGE_COLOR).reshape(self.cam_height, self.cam_width, 4)
     
-    def reset(self, env_index = None):
+    def reset(self, env_index: List[int] = None):
+        """Resets the specified robot. Specifically, it will move it to a random position, give it zero velocity, and drop it from a height of 0.35 meters.
+
+        Args:
+            env_index (list, torch.Tensor, optional): Indices of environments to reset. If none, all environments are reset. Defaults to None.
+        """
         if env_index is None:
             env_index = self.all_env_index
         else:
