@@ -6,11 +6,12 @@ import gym
 import torch
 import numpy as np
 import torchgeometry as tgm
+from isaacgym.torch_utils import *
 from stable_baselines3.common.vec_env import VecEnv
 
 class HistoryBuffer:
     """Buffer to store most recently updated data that is updated every few seconds"""
-    def __init__(self, num_envs: int, dt: float, update_freq: int, history_size: int, data_size: int, device: torch.device):
+    def __init__(self, num_envs: int, dt: float, update_freq: int, history_size: int, data_size: int, device: torch.device, fill: torch.Tensor = None):
         """
         Args:
             num_envs (int): number of environments to store data for
@@ -19,6 +20,7 @@ class HistoryBuffer:
             history_size (int): how much data to store in the buffer
             data_size (int): size of the data we are storing -- data must be 1-dimensional
             device (torch.device): device (cpu/cuda) that data should be on
+            fill (torch.Tensor): values to fill the buffer with, defaults to None
         """
         self.device = device
         self.dt = dt
@@ -28,6 +30,11 @@ class HistoryBuffer:
 
         self.elapsed_time = torch.zeros(num_envs).to(self.device)
         self.data = torch.zeros(num_envs, data_size, history_size).to(self.device)
+
+        if fill is not None:
+            for i in range(history_size):
+                self.data[:, :, i] = fill
+
     
     def step(self, new_data: torch.Tensor):
         """Updates the buffer if enough time has elapsed (specified by `dt`) from the previous call
@@ -40,7 +47,7 @@ class HistoryBuffer:
         update_idx = self.elapsed_time >= self.update_freq
         self.elapsed_time[update_idx] = 0
 
-        self.data[update_idx, :, :self.history_size - 1] = self.data[update_idx, :, 1:]
+        self.data[update_idx, :, 1:] = self.data[update_idx, :, :-1]
         self.data[update_idx, :, 0] = new_data[update_idx, :] # 0 is the newest
     
     def get(self, idx: Union[int, List[int]]) -> torch.Tensor:
@@ -109,17 +116,23 @@ class ConcurrentTrainingEnv(VecEnv):
 
         self.env = IsaacGymEnvironment(num_environments, True, asset_path, asset_name, self.default_dof_pos)
         self.feet_idx = [3, 6, 9, 12] # TODO: dynamically get this by rb name
-        self.term_contacts = [0, 1, 4, 7, 10] # body, shoulder
+
+        abduct = [1, 4, 7, 10]
+        thigh = [2, 5, 8, 11]
+        self.term_contacts = [0] + thigh # base + knee
+
+
         self.dt = 1. / 60. # TODO: get this dynamically
         self.max_ep_len = 1000 / self.dt
-        self.cmd = torch.Tensor([3.5, 0, 0]).repeat(num_environments, 1).to(self.device) # desired [x_vel, y_vel, ang_vel]
+        self.cmd = torch.Tensor([1, 0, 0]).repeat(num_environments, 1).to(self.device) # desired [x_vel, y_vel, ang_vel]
+        self.gravity_vec = torch.Tensor([0, 0, -1]).repeat(num_environments, 1).to(self.device)
 
         # tracking for agent
         self.takeoff_time = torch.zeros(num_environments, 4).to(self.device)
         self.touchdown_time = torch.zeros(num_environments, 4).to(self.device)
         self.ep_lens = torch.zeros(num_environments).to(self.device)
         self.prev_joint_pos = torch.zeros(num_environments, 12).to(self.device)
-        self.des_joint_pos_hist = HistoryBuffer(num_environments, self.dt, 0.02, 2, 12, self.device)
+        self.des_joint_pos_hist = HistoryBuffer(num_environments, self.dt, 0.02, 2, 12, self.device, fill = self.default_dof_pos)
         self.joint_pos_err_hist = HistoryBuffer(num_environments, self.dt, 0.02, 3, 12, self.device)
         self.joint_vel_hist = HistoryBuffer(num_environments, self.dt, 0.02, 3, 12, self.device)
 
@@ -131,14 +144,14 @@ class ConcurrentTrainingEnv(VecEnv):
         self.spec = None
 
     def sq_norm(self, tensor: torch.Tensor, dim: int = -1):
-        """Helper function to compute sqrt(norm(x)) without actually doing norm, thus avoiding the sqrt
+        """Helper function to compute norm(x)^2 without actually doing norm, thus avoiding the sqrt
 
         Args:
             tensor (torch.Tensor): input tensor to norm
             dim (int, optional): dimension to compute norm over. Defaults to -1.
 
         Returns:
-            torch.Tensor: sqrt(norm(x)) of given tensor
+            torch.Tensor: squared norm of given tensor
         """
         return torch.sum(torch.pow(tensor, 2), dim = dim)
 
@@ -163,7 +176,7 @@ class ConcurrentTrainingEnv(VecEnv):
         """
         r_v = G.k_v * torch.exp(-self.sq_norm(command[:, :2] - root_lin_vel[:, :2]))
 
-        r_w = G.k_w * torch.exp(-1.5 * self.sq_norm(command[:, [2]] - root_lin_vel[:, [2]]))
+        r_w = G.k_w * torch.exp(-1.5 * torch.square(command[:, 2] - root_ang_vel[:, 2]))
 
         tmax = torch.maximum(self.touchdown_time, self.takeoff_time)
         r_air = G.k_a * torch.clamp(tmax, max = 0.2) * (tmax < 0.25)
@@ -174,9 +187,13 @@ class ConcurrentTrainingEnv(VecEnv):
         sqrt_vel = torch.sqrt(torch.linalg.norm(feet_vel, dim = -1))
         r_cl = G.k_cl * torch.pow(foot_height - G.des_foot_height, 2) * sqrt_vel
 
-        yaw = tgm.quaternion_to_angle_axis(root_quat)[:, 2]
-        yaw_diff = torch.where(yaw > torch.pi, 2 * torch.pi - yaw, yaw)
-        r_ori = G.k_ori * torch.pow(yaw_diff, 2) # maybe wrong, not sure what it should be
+        # yaw = tgm.quaternion_to_angle_axis(root_quat)[:, 2]
+        # yaw_diff = torch.where(yaw > torch.pi, 2 * torch.pi - yaw, yaw)
+        # r_ori = G.k_ori * torch.pow(yaw_diff, 2) # maybe wrong, not sure what it should be
+        
+        # taken from NVIDIA-Omniverse example
+        ori = quat_rotate_inverse(root_quat, self.gravity_vec)
+        r_ori = G.k_ori * self.sq_norm(ori[:, :2])
 
         r_t = G.k_t * self.sq_norm(self.env.get_joint_torque())
 
@@ -186,17 +203,25 @@ class ConcurrentTrainingEnv(VecEnv):
 
         r_q_dd = G.k_q_dd * self.sq_norm(joint_vel - self.joint_vel_hist.get(0))
 
-        r_s1 = G.k_s1 * self.sq_norm(actions - self.des_joint_pos_hist.get(0))
+        r_s1 = G.k_s1 * self.sq_norm(actions - des_jpos_t1)
 
         r_s2 = G.k_s2 * self.sq_norm(actions - 2 * des_jpos_t1 + des_jpos_t2)
 
         r_base = G.k_base * (0.8 * torch.pow(root_lin_vel[:, 2], 2) + 0.2 * torch.abs(root_ang_vel[:, 0]) + 0.2 * torch.abs(root_ang_vel[:, 1]))
 
+        r_w[:] = 0
+        r_slip[:] = 0
+        r_s1[:] = 0
+        r_s2[:] = 0
+    
         r_pos = r_v + r_w + torch.sum(r_air, dim = -1) # in the paper, they only sum 3 feet instead of 4?
         r_neg = r_ori + r_t + r_q + r_q_d + r_q_dd + r_s1 + r_s2 + r_base + torch.sum(r_slip + r_cl, dim = -1) # in the paper, they only sum 3 feet instead of 4?
         r_tot = r_pos + torch.exp(0.2 * r_neg)
 
-        return r_tot      
+        terms = torch.mean(torch.stack([r_tot, r_pos, r_neg, r_v, r_w, torch.sum(r_air, dim = -1), torch.sum(r_slip, dim = -1), torch.sum(r_cl, dim = -1), r_t, r_q, r_q_d, r_q_dd, r_s1, r_s2, r_base, r_ori]), dim = 1)
+        names = ['total', 'pos', 'neg', 'r_v', 'r_w', 'r_air', 'r_slip', 'r_cl', 'r_t', 'r_q', 'r_qdot', 'r_qddot', 'r_s1', 'r_s2', 'r_base', 'r_ori']
+
+        return r_tot, terms, names
 
     def make_observation_and_reward(self, actions: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """Makes observation from simulation environment and computes the reward from the observations and action
@@ -206,7 +231,7 @@ class ConcurrentTrainingEnv(VecEnv):
 
         Returns:
             Tuple[torch.Tensor, torch.Tensor]: Newest observation of shape `(num_envs, observation_space)` and respective reward of shape `(num_envs)`
-        """
+        """        
         root_quat = self.env.get_rotation() # (num_envs, 4)
         root_ang_vel = self.env.get_angular_velocity() # (num_envs, 3)
         joint_pos = self.env.get_joint_position() # (num_envs, 12)
@@ -227,14 +252,14 @@ class ConcurrentTrainingEnv(VecEnv):
         foot_height = feet_pos[:, :, 2] # (num_envs, 4), assuming flat ground
         contact_probs = self.env.get_contact_states()[:, self.feet_idx] # (num_envs, 4)
 
-        reward = None
+        reward, terms, names = None, None, None
         if actions is not None:
-            reward = self.make_reward(root_quat, root_ang_vel, joint_pos, joint_vel, des_jpos_t1, des_jpos_t2, command, root_lin_vel, foot_height, contact_probs, actions)
+            reward, terms, names = self.make_reward(root_quat, root_ang_vel, joint_pos, joint_vel, des_jpos_t1, des_jpos_t2, command, root_lin_vel, foot_height, contact_probs, actions)
 
         obs_list = [root_quat, root_ang_vel, joint_pos, joint_vel, des_jpos_t1, des_jpos_t2, Q_err_hist, Q_vel_hist, relative_feet_pos, command, root_lin_vel, foot_height, contact_probs]
         obs = torch.cat(obs_list, dim = 1) # (num_envs, 153)
 
-        return obs, reward
+        return obs, reward, terms, names
 
     def check_termination(self) -> Tuple[torch.Tensor, torch.Tensor]:
         """Checks if any environments have terminated (because of collisions) or truncated (ran out of time)
@@ -277,7 +302,7 @@ class ConcurrentTrainingEnv(VecEnv):
         
         self.env.reset(env_idx)
 
-        obs, _ = self.make_observation_and_reward(None)
+        obs, rew, terms, names = self.make_observation_and_reward(None)
         return obs[env_idx]
 
     def reset(self) -> torch.Tensor:
@@ -305,7 +330,7 @@ class ConcurrentTrainingEnv(VecEnv):
         self.env.step(actions)
         self.update_feet_states()
 
-        new_obs, reward = self.make_observation_and_reward(actions)
+        new_obs, reward, terms, names = self.make_observation_and_reward(actions)
 
         new_joint_pos = self.env.get_joint_position()
         joint_vel = (new_joint_pos - self.prev_joint_pos) / self.dt
@@ -329,6 +354,9 @@ class ConcurrentTrainingEnv(VecEnv):
             new_obs[reset_idx, :] = self.reset_partial(reset_idx)
 
         infos = [{} for _ in range(self.num_envs)]
+        infos[0]['terms'] = terms
+        infos[0]['names'] = names
+
         return new_obs, reward, torch.logical_or(term, trunc), infos       
 
     def render(self) -> torch.Tensor:
