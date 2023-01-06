@@ -1,5 +1,6 @@
 import torch
-from rewards.reward_helpers import squared_norm
+from rlloco.agents.rewards.reward_helpers import squared_norm
+from typing import Union
 
 """
 This file contains the reward functions for the agents.
@@ -9,7 +10,7 @@ Currently implemented functions all come from the Wild Anymal paper https://legg
 
 def lin_velocity(v_des: torch.Tensor, v_act: torch.Tensor):
     """If the norm of the desired velocity is 0, then the reward is exp(-norm(v_act)^2)\n
-    If the dot product of the desired velocity and the actual velocity is greater than the norm of the desired velocity, then the reward is 1\n
+    If the dot product of the desired velocity and the actual velocity is greater than the norm of the desired velocity, then the reward is 1.
     Otherwise, the reward is exp(-(dot(v_des, v_act) - norm(v_des))^2)
 
 
@@ -31,14 +32,14 @@ def lin_velocity(v_des: torch.Tensor, v_act: torch.Tensor):
     x = torch.exp(squared_norm(v_act)) * (v_des_norm == 0)
     x = 1 * (dot_v_des_v_act > v_des_norm)
     x = torch.exp(-torch.pow(dot_v_des_v_act - v_des_norm, 2)) * \
-        ~((v_des == 0) + torch.sum(v_des * v_act, dim=1) > v_des_norm)
+        ~((v_des_norm == 0) + dot_v_des_v_act > v_des_norm)
 
     return x
 
 
 def ang_velocity(w_des_yaw, w_act_yaw):
-    """If the desired angular velocity is 0, then the reward is exp(-(w_act_yaw)^2)\n
-    If the dot product of the desired angular velocity and the actual angular velocity is greater than the desired angular velocity, then the reward is 1\n
+    """If the desired angular velocity is 0, then the reward is exp(-(w_act_yaw)^2).
+    If the dot product of the desired angular velocity and the actual angular velocity is greater than the desired angular velocity, then the reward is 1.
     Otherwise, the reward is exp(-(dot(w_des_yaw,w_act_yaw) - w_des_yaw)^2)
 
     Args:
@@ -48,8 +49,8 @@ def ang_velocity(w_des_yaw, w_act_yaw):
     Returns:
         torch.Tensor: the reward for each env of shape (num_envs,)
     """
-    w_act_yaw = w_act_yaw.squeeze()  # (num_envs,)
-    w_des_yaw = w_des_yaw.squeeze()  # (num_envs,)
+    w_act_yaw = w_act_yaw  # (num_envs,)
+    w_des_yaw = w_des_yaw  # (num_envs,)
 
     # dot product = elementwise multiplication since w_des_yaw and w_act_yaw are 1D
     dot_w_des_w_act = w_des_yaw * w_act_yaw
@@ -59,13 +60,13 @@ def ang_velocity(w_des_yaw, w_act_yaw):
     x = torch.exp(-torch.pow(dot_w_des_w_act - w_des_yaw, 2)) * \
         ~((w_des_yaw == 0) + (w_des_yaw * w_act_yaw > w_des_yaw))
 
-    return x
+    return x.squeeze(1)
 
 
 def linear_ortho_velocity(v_des: torch.Tensor, v_act: torch.Tensor) -> torch.Tensor:
     """
-    This term penalizes the velocity orthogonal to the target direction 
-    Reward is exp(-3 * norm(v_0)^2), where v_0 is v_act-(dot(v_des,v_act))*v_des
+    This term penalizes the velocity orthogonal to the target direction .
+    Reward is exp(-3 * norm(v_0)^2), where v_0 is v_act-(dot(v_des,v_act))*v_des.
 
     Args:
         v_des (torch.Tensor): Desired X,Y,Z velocity of shape (num_envs, 3)
@@ -86,13 +87,13 @@ def body_motion(v_z: torch.Tensor, w_x: torch.Tensor, w_y: torch.Tensor) -> torc
 
     Args:
         v_z (torch.Tensor): Velocity in the z direction of shape (num_envs, 1)
-        w_x (torch.Tensor): Angular velocity in the x direction of shape (num_envs, 1)
-        w_y (torch.Tensor): Angular velocity in the y direction of shape (num_envs, 1)
+        w_x (torch.Tensor): Current angular velocity in the x direction of shape (num_envs, 1)
+        w_y (torch.Tensor): Current angular velocity in the y direction of shape (num_envs, 1)
 
     Returns:
         torch.Tensor: the reward for each env of shape (num_envs,)
     """
-    return (-1.25*torch.pow(v_z, 2) - 0.4 * torch.abs(w_x) - 0.4 * torch.abs(w_y)).squeeze()
+    return (-1.25*torch.pow(v_z, 2) - 0.4 * torch.abs(w_x) - 0.4 * torch.abs(w_y)).squeeze(1)
 
 
 def foot_clearance(h: torch.Tensor) -> torch.Tensor:
@@ -104,7 +105,7 @@ def foot_clearance(h: torch.Tensor) -> torch.Tensor:
     Returns:
         torch.Tensor: the reward for each env of shape (num_envs,)
     """
-    return torch.sum(-1 * (torch.max(h, dim=2)[0].squeeze() < -0.2), dim=1)
+    return torch.sum(-1 * (torch.max(h, dim=2)[0] < -0.2), dim=1)
 
 
 def shank_or_knee_col(is_col: torch.Tensor, curriculum_factor: float) -> torch.Tensor:
@@ -136,12 +137,12 @@ def joint_motion(j_vel:  torch.Tensor, j_vel_t_1: torch.Tensor, dt: float, curri
     return -curriculum_factor * torch.sum(0.01*(j_vel)**2 + accel**2, dim=1)
 
 
-def joint_contraint(q: torch.Tensor, q_th: torch.Tensor) -> torch.Tensor:
-    """This term penalizes the joint position if it is outside of the joint limits. We only set a threshold for the knee joints.
+def joint_constraint(q: torch.Tensor, q_th: Union[float, torch.Tensor]) -> torch.Tensor:
+    """This term penalizes the joint position if it is outside of the joint limits.
 
     Args:
         q (torch.Tensor): Joint position of shape (num_envs, num_joints)
-        q_th (torch.Tensor): Joint position threshold of shape (num_envs, num_joints)
+        q_th (float, torch.Tensor): Joint position threshold. Can be scalar, 1d (num_joints,) or 2d (num_envs, num_joints).
 
     Returns:
         torch.Tensor: the reward for each env of shape (num_envs,)
@@ -150,7 +151,7 @@ def joint_contraint(q: torch.Tensor, q_th: torch.Tensor) -> torch.Tensor:
     return torch.sum(-torch.pow(q-q_th, 2) * mask, dim=1)
 
 
-def target_smoothness(joint_t_des: torch.Tensor, joint_t_1_des: torch.Tensor, joint_t_2_des: torch.Tensor, curriculum_factor: float) -> torch.Tensor:
+def target_smoothness(joint_target_t: torch.Tensor, joint_t_1_des: torch.Tensor, joint_t_2_des: torch.Tensor, curriculum_factor: float) -> torch.Tensor:
     """This term penalizes the smoothness of the target foot trajectories
 
     Args:
@@ -162,7 +163,7 @@ def target_smoothness(joint_t_des: torch.Tensor, joint_t_1_des: torch.Tensor, jo
     Returns:
         torch.Tensor: the reward for each env of shape (num_envs,)
     """
-    return -curriculum_factor * torch.sum((joint_t_des - joint_t_1_des)**2 + (joint_t_des - 2*joint_t_1_des + joint_t_2_des)**2, dim=1)
+    return -curriculum_factor * torch.sum((joint_target_t - joint_t_1_des)**2 + (joint_target_t - 2*joint_t_1_des + joint_t_2_des)**2, dim=1)
 
 
 def torque_reward(tau: torch.Tensor, curriculum_factor: float) -> torch.Tensor:
