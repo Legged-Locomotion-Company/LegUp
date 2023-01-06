@@ -24,15 +24,15 @@ def build_jacobian_and_fk(q_vec, leg):
     # Create the homogenous transforms for the joints in their zero position
     # [0.14775, 0.049, 0]
     torso_to_hip_zero = translation_ht(
-        0.14775*front, 0.049*left, 0)  # .expand(NUM_ENVS, 4, 4)
+        0.14775*front, 0.049*left, 0)
     # [0.055, -0.019, 0]
     hip_to_shoulder_zero = translation_ht(
-        0.055*front, 0.019*left, 0)  # .expand(NUM_ENVS, 4, 4)
+        0.055*front, 0.019*left, 0)
     # [0, 0.049, -0.2085]
     shoulder_to_knee_zero = translation_ht(
-        0, 0.049*left, -0.2085)  # .expand(NUM_ENVS, 4, 4)
+        0, 0.049*left, -0.2085)
     # [0, 0, -0.194]
-    knee_to_foot_zero = translation_ht(0, 0, -0.194)  # .expand(NUM_ENVS, 4, 4)
+    knee_to_foot_zero = translation_ht(0, 0, -0.194)
 
     foot_to_knee_zero = invert_ht(knee_to_foot_zero)
     foot_to_shoulder_zero = foot_to_knee_zero @ invert_ht(
@@ -88,6 +88,14 @@ def build_jacobian_and_fk(q_vec, leg):
 
 
 def build_jacobian_and_fk_all_feet(q_vec):
+    """This function builds the jacobian and fk for all 4 of the feet
+
+    Args:
+        q_vec (torch.Tensor): a (NUM_ENVS, 12) tensor of joint angles for each of the robots
+
+    Returns:
+        torch.Tensor: a (NUM_ENVS x 4 x 3) tensor representing the positions of each of the 4 feet of each of the robots
+    """
     FL_J, FL_r = build_jacobian_and_fk(q_vec, 0)
     FR_J, FR_r = build_jacobian_and_fk(q_vec, 1)
     BL_J, BL_r = build_jacobian_and_fk(q_vec, 2)

@@ -1,6 +1,6 @@
 import torch
 
-class robot:
+class Robot:
     """An abstract class to be inherited by specific robot classes
 
     Attributes:
@@ -33,3 +33,18 @@ class robot:
         """
         
         raise NotImplementedError("Cannot call foot_positions function of abstract robot base class")
+
+    def foot_twist(q: torch.Tensor) -> torch.Tensor:
+        """ Calculates the 6 dimensional twist vector for the foot positions
+
+        Args:
+            q (torch.Tensor): This is a (NUM_ENVS x NUM_DOFS) vector containing the positions of each of the robots joints in each environment
+
+        Raises:
+            NotImplementedError: This error is thrown if the function is called on the base class, or if the function is not implemented in a subclass
+
+        Returns:
+            (torch.Tensor): This is a (NUM_ENVS x NUM_FEET x 6) vector containing the twist vectors for each of the robots feet in the robots local coordinates
+        """
+
+        raise NotImplementedError("Cannot call foot_twist function of abstract robot base class")

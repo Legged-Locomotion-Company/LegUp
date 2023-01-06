@@ -1,11 +1,11 @@
 import torch
 
 from rlloco.robots.robot import robot
-from rlloco.robots.mini_cheetah.kinematics.mini_cheetah_kin_torch import build_jacobian_and_fk
+from rlloco.robots.mini_cheetah.kinematics.mini_cheetah_kin_torch import build_jacobian_and_fk_all_feet
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-class mini_cheetah(robot):
+class MiniCheetah(robot):
     """This class respresents the mini_cheetah robot and stores information relevant to it
     Attributes:
         home_position (torch.Tensor):
@@ -25,4 +25,6 @@ class mini_cheetah(robot):
             q (torch.Tensor): _description_
         """
 
+        jacobian, foot_pos = build_jacobian_and_fk_all_feet(q)
 
+        return foot_pos
