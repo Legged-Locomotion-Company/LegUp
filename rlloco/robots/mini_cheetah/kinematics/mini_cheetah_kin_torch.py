@@ -1,74 +1,13 @@
 import torch
 
-from rlloco.robots.common.kinematics.inv_kin_algs import dls_invkin
+from rlloco.robots.common.kinematics.kin_utils import xrot, yrot, invert_ht, invert_ht_batch, translation_ht, screw_to_ht, ht_adj, ht_adj_batch, screwvec_to_mat, screwmat_to_ht, screw_axis
+from rlloco.robots.common.kinematics.inv_kin_algs import dls_invkin, pinv_invkin
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
+
 def get_home_position():
     return torch.tensor([0, -0.8, 1.6, 0, -0.8, 1.6, 0, -0.8, 1.6, 0, -0.8, 1.6]).to(device)
-
-
-def invert_ht(ht):
-    """Inverts a 3d 4x4 homogenous transform. Using this function is a lot better because it does not need the iterative algorithm that is used in regular matrix inversion.
-
-    Args:
-        ht (torch.Tensor): The homogenous transform
-
-    Returns:
-        torch.Tensor: returns the inverted homogenous transform. Will be equail to torch.invert(ht)
-    """
-
-    # TODO This sucks make it better
-    ht[:, :3, :3] = ht[:, :3, :3].transpose(1, 2)
-    ht[:, :3, 3] = (ht[:, :3, :3] @ ht[:, :3, 3].unsqueeze(2)).squeeze(2)
-
-    return ht
-
-
-def xrot(theta):
-    sth = torch.sin(theta)
-    cth = torch.cos(theta)
-
-    result = torch.eye(4).repeat(len(theta), 1, 1)
-
-    result[:, 1, 1] = cth
-    result[:, 1, 2] = -sth
-    result[:, 2, 1] = sth
-    result[:, 2, 2] = cth
-
-    return result
-
-
-def yrot(theta):
-    sth = torch.sin(theta)
-    cth = torch.cos(theta)
-
-    result = torch.eye(4).repeat(len(theta), 1, 1)
-
-    result[:, 0, 0] = cth
-    result[:, 0, 2] = sth
-    result[:, 2, 0] = -sth
-    result[:, 2, 2] = cth
-
-    return result
-
-def translation_ht(x, y, z):
-    pos = torch.tensor([x, y, z], device= device)
-
-def translation_ht(position: torch.Tensor):
-    """Instantiates a new 4x4 homogenous transform tensor which is a pure
-
-    Args:
-        pos (torch.Tensor): a (3) vec with (x,y,z) coords for the position to make in the ht
-
-    Returns:
-        torch.Tensor: a (4x4) tensor homogenous transform 
-    """
-
-    ht = torch.eye(4, device= device)
-    ht[0,0:3] = position
-
-    return ht
 
 
 def build_jacobian_and_fk(q_vec, leg):
@@ -78,82 +17,85 @@ def build_jacobian_and_fk(q_vec, leg):
 
     NUM_ENVS, _ = q_vec.shape
 
-    # Create the homogenous transforms for the joints
-    torso_to_hip = torch.tensor([
-        [1, 0, 0, 0.14775 * front],
-        [0, 1, 0, 0.049 * left],
-        [0, 0, 1, 0],
-        [0, 0, 0, 1]
-    ], dtype=torch.float32).repeat(NUM_ENVS, 1, 1)
+    hip_angles = q_vec[:, 3*leg + 0]
+    shoulder_angles = q_vec[:, 3*leg + 1]
+    knee_angles = q_vec[:, 3*leg + 2]
+
+    # Create the homogenous transforms for the joints in their zero position
+    # [0.14775, 0.049, 0]
+    torso_to_hip_zero = translation_ht(
+        0.14775*front, 0.049*left, 0)
     # [0.055, -0.019, 0]
-    hip_to_shoulder = xrot(q_vec[:, 3*leg + 0]) @ translation_ht(0.55*front, 0.19*left, 0)
-    # hip_to_shoulder = xrot(q_vec[:, 3*leg + 0]) @ torch.tensor([
-    #     [1, 0, 0, 0.055 * front],
-    #     [0, 1, 0, 0.019 * left],
-    #     [0, 0, 1, 0],
-    #     [0, 0, 0, 1]
-    # ])
-    # [0, -0.049, -0.2085]
-    shoulder_to_knee = yrot(q_vec[:, 3*leg + 1]) @ translation_ht(0, 0.49*left, -0.2085)
-    # shoulder_to_knee = yrot(q_vec[:, 3*leg + 1]) @ torch.tensor([
-    #     [1, 0, 0, 0],
-    #     [0, 1, 0, 0.049 * left],
-    #     [0, 0, 1, -0.2085],
-    #     [0, 0, 0, 1]
-    # ])
+    hip_to_shoulder_zero = translation_ht(
+        0.055*front, 0.019*left, 0)
+    # [0, 0.049, -0.2085]
+    shoulder_to_knee_zero = translation_ht(
+        0, 0.049*left, -0.2085)
     # [0, 0, -0.194]
-    knee_to_foot = yrot(q_vec[:, 3*leg + 2]) @ translation_ht(0, 0, -1.94)
-    # knee_to_foot = yrot(q_vec[:, 3*leg + 2]) @ torch.tensor([
-    #     [1, 0, 0, 0],
-    #     [0, 1, 0, 0],
-    #     [0, 0, 1, -0.194],
-    #     [0, 0, 0, 1]
-    # ])
+    knee_to_foot_zero = translation_ht(0, 0, -0.194)
 
-    # create the axes
-    hip_axis = torch.tensor(
-        [1, 0, 0], dtype=torch.float32).repeat(len(q_vec), 1)
-    shoulder_axis = torch.tensor(
-        [0, 1, 0], dtype=torch.float32).repeat(len(q_vec), 1)
-    knee_axis = torch.tensor(
-        [0, 1, 0], dtype=torch.float32).repeat(len(q_vec), 1)
+    foot_to_knee_zero = invert_ht(knee_to_foot_zero)
+    foot_to_shoulder_zero = foot_to_knee_zero @ invert_ht(
+        shoulder_to_knee_zero)
+    foot_to_hip_zero = foot_to_shoulder_zero @ invert_ht(hip_to_shoulder_zero)
+    foot_to_torso_zero = foot_to_hip_zero @ invert_ht(torso_to_hip_zero)
 
-    # create joint to foots
-    shoulder_to_foot = shoulder_to_knee @ knee_to_foot
-    hip_to_foot = hip_to_shoulder @ shoulder_to_foot
-    torso_to_foot = torso_to_hip @ hip_to_foot
+    torso_to_foot_zero = invert_ht(foot_to_torso_zero)
 
-    # create joint to base
-    hip_to_torso = invert_ht(torso_to_hip)
-    shoulder_to_torso = invert_ht(hip_to_shoulder) @ hip_to_torso
-    knee_to_torso = invert_ht(shoulder_to_knee) @ shoulder_to_torso
+    # create rotation axes
+    hip_ax = torch.tensor([front * 1., 0., 0.], device=device)
+    shoulder_ax = torch.tensor([0., left * 1., 0.], device=device)
+    knee_ax = torch.tensor([0., left * 1., 0.], device=device)
 
-    # cross the axes to get local gradients
-    local_hip_g = torch.one((len(q_vec), 4))
-    local_shoulder_g = torch.ones((len(q_vec), 4))
-    local_knee_g = torch.ones((len(q_vec), 4))
+    # create the screw axes
+    hip_screw_b = screw_axis(hip_ax, foot_to_hip_zero[:3, 3])
+    shoulder_screw_b = screw_axis(shoulder_ax, foot_to_shoulder_zero[:3, 3])
+    knee_screw_b = screw_axis(knee_ax, foot_to_knee_zero[:3, 3])
 
-    # print(torch.cross(hip_axis[1], hip_to_foot[1, :3, 3]))
-    local_hip_g[:, :3] = torch.cross(hip_axis, hip_to_foot[:, :3, 3], dim=1)
-    local_shoulder_g[:, :3] = torch.cross(
-        shoulder_axis, shoulder_to_foot[:, :3, 3], dim=1)
-    local_knee_g[:, :3] = torch.cross(knee_axis, knee_to_foot[:, :3, 3], dim=1)
+    hip_screwmat_b = screwvec_to_mat(hip_screw_b)
+    shoulder_screwmat_b = screwvec_to_mat(shoulder_screw_b)
+    knee_screwmat_b = screwvec_to_mat(knee_screw_b)
 
-    # rotate the local gradients into the global frame
-    hip_g = (hip_to_torso[:, :3, :3] @
-             local_hip_g.unsqueeze(2)[:, :3]).squeeze(2)[:, :3]
-    shoulder_g = (shoulder_to_torso[:, :3, :3] @
-                  local_shoulder_g.unsqueeze(2)[:, :3]).squeeze(2)[:, :3]
-    knee_g = (knee_to_torso[:, :3, :3] @
-              local_knee_g.unsqueeze(2)[:, :3]).squeeze(2)[:, :3]
+    hip_ht_b = screwmat_to_ht(hip_screwmat_b, hip_angles)
+    shoulder_ht_b = screwmat_to_ht(shoulder_screwmat_b, shoulder_angles)
+    knee_ht_b = screwmat_to_ht(knee_screwmat_b, knee_angles)
 
-    # stack the gradients to get the jacobian
-    jacobian = torch.stack((hip_g, shoulder_g, knee_g), dim=2)
+    foot_pos = torso_to_foot_zero @ hip_ht_b @ shoulder_ht_b @ knee_ht_b
 
-    return jacobian.to(device), torso_to_foot[:, :3, 3].to(device)
+    minus_hip_ht_b = screw_to_ht(-hip_screw_b, hip_angles)
+    minus_shoulder_ht_b = screw_to_ht(-shoulder_screw_b, shoulder_angles)
+    minus_knee_ht_b = screw_to_ht(-knee_screw_b, knee_angles)
+    minus_foot_ht_b = screwmat_to_ht(-torch.eye(4, device=device),
+                                     torch.zeros(NUM_ENVS, device=device))
+
+    j_knee_b = knee_screw_b.expand(NUM_ENVS, 6)
+    j_shoulder_b = ht_adj_batch(minus_knee_ht_b) @ shoulder_screw_b
+    j_hip_b = ht_adj_batch(minus_knee_ht_b @ minus_shoulder_ht_b) @ hip_screw_b
+
+    torso_to_foot_rot = foot_pos[:, :3, :3]
+    torso_to_foot_rot_adj = torch.zeros((NUM_ENVS, 6, 6), device=device)
+    torso_to_foot_rot_adj[:, :3, :3] = torso_to_foot_rot
+    torso_to_foot_rot_adj[:, 3:, 3:] = torso_to_foot_rot
+
+    j_knee = torch.einsum('Bij,Bj->Bi', torso_to_foot_rot_adj, j_knee_b)
+    j_shoulder = torch.einsum(
+        'Bij,Bj->Bi', torso_to_foot_rot_adj, j_shoulder_b)
+    j_hip = torch.einsum('Bij,Bj->Bi', torso_to_foot_rot_adj, j_hip_b)
+
+    j = torch.stack((j_hip, j_shoulder, j_knee), dim=-1)
+
+    return j, foot_pos[:, :3, 3]
 
 
 def build_jacobian_and_fk_all_feet(q_vec):
+    """This function builds the jacobian and fk for all 4 of the feet
+
+    Args:
+        q_vec (torch.Tensor): a (NUM_ENVS, 12) tensor of joint angles for each of the robots
+
+    Returns:
+        torch.Tensor: a (NUM_ENVS x 4 x 3) tensor representing the positions of each of the 4 feet of each of the robots
+    """
     FL_J, FL_r = build_jacobian_and_fk(q_vec, 0)
     FR_J, FR_r = build_jacobian_and_fk(q_vec, 1)
     BL_J, BL_r = build_jacobian_and_fk(q_vec, 2)
@@ -178,18 +120,21 @@ def use_ik(q_vec, goals, ik_alg):
     """
 
     # Here we dissect the goals tensor to create a (NUM_ENVS x 4 x 3) vector which contains the joint targets for each of the robots 4 feet separately
-    goals_per_foot = torch.reshape(goals, (-1, 4, 3))
+    goals_per_foot = goals.reshape(-1, 4, 3)
 
     # Here we find the foot errors and the jacobian
 
     jacobian, absolute_foot_pos = build_jacobian_and_fk_all_feet(q_vec)
-    _, home_pos = build_jacobian_and_fk_all_feet(get_home_position().reshape((1,-1)))
+    _, home_pos = build_jacobian_and_fk_all_feet(
+        get_home_position().reshape((1, -1)))
     relative_foot_pos = absolute_foot_pos - home_pos
     error = goals_per_foot - relative_foot_pos
 
-    per_foot_errors = ik_alg(jacobian, error)
+    per_foot_errors = ik_alg(
+        jacobian[:, :, 3:].reshape(-1, 3, 3), error.reshape(-1, 3))
 
     return q_vec + per_foot_errors.reshape((-1, 12))
+
 
 def mini_cheetah_dls_invkin(q_vec, goals):
     """Simply executes the dls_invkin algorithm on the mini_cheetah robot
@@ -203,6 +148,10 @@ def mini_cheetah_dls_invkin(q_vec, goals):
     """
 
     return use_ik(q_vec, goals, dls_invkin)
+
+
+def mini_cheetah_pinv_invkin(q_vec, goals):
+    return use_ik(q_vec, goals, pinv_invkin)
 
 
 def inv_kin_torch(q_vec, goals):
