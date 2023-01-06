@@ -121,7 +121,7 @@ class GPUVecEnv(ConcurrentTrainingEnv):
 
 
 def train_ppo():
-    env = GPUVecEnv(PARALLEL_ENVS, f"{os.getcwd()}/rlloco/robots/mini-cheetah/physical_models", "mini-cheetah.urdf")
+    env = GPUVecEnv(PARALLEL_ENVS, f"{os.getcwd()}/rlloco/robots/mini_cheetah/physical_models", "mini-cheetah.urdf")
     cb = CustomCallback(env)
 
     model = PPO('MlpPolicy', env, tensorboard_log = './concurrent_training_tb', verbose = 2, policy_kwargs = {'net_arch': [512, 256, 64]}, 
@@ -131,7 +131,7 @@ def train_ppo():
     model.save('ConcurrentTrainingEnv')
 
 def eval_ppo():
-    env = GPUVecEnv(PARALLEL_ENVS, f"{os.getcwd()}/rlloco/robots/mini-cheetah/physical_models", "mini-cheetah.urdf")
+    env = GPUVecEnv(PARALLEL_ENVS, f"{os.getcwd()}/rlloco/robots/mini_cheetah/physical_models", "mini-cheetah.urdf")
     model = PPO.load('ConcurrentTrainingEnv')
 
     obs = env.reset()
