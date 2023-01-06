@@ -143,6 +143,8 @@ class ConcurrentTrainingEnv(VecEnv):
         self.reward_range = (-float("inf"), float("inf"))
         self.spec = None
 
+        torch.autograd.set_detect_anomaly(True)
+
     def sq_norm(self, tensor: torch.Tensor, dim: int = -1):
         """Helper function to compute norm(x)^2 without actually doing norm, thus avoiding the sqrt
 
@@ -209,6 +211,7 @@ class ConcurrentTrainingEnv(VecEnv):
 
         r_base = G.k_base * (0.8 * torch.pow(root_lin_vel[:, 2], 2) + 0.2 * torch.abs(root_ang_vel[:, 0]) + 0.2 * torch.abs(root_ang_vel[:, 1]))
 
+        # zeroing out some rewards I think aren't working properly
         r_w[:] = 0
         r_slip[:] = 0
         r_s1[:] = 0
