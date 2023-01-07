@@ -2,7 +2,20 @@ from rewards import *
 
 
 class WildAnymal:
-    def __init__(self, env, robot_config, train_config, dt):
+    """
+    Reward function for the Wild Anymal robot.
+    https://leggedrobotics.github.io/rl-perceptiveloco/assets/pdf/wild_anymal.pdf (pages 18+19)
+    """
+
+    def __init__(self, env, robot_config, train_config, dt: float):
+        """Initialize reward function.
+
+        Args:
+            env (_type_): Isaac Gym environment
+            robot_config (_type_): Robot interface configuration dictionary
+            train_config (_type_): Configuration dictionary for training
+            dt (float): Time step
+        """
         self.env = env
         self.robot_config = robot_config
         self.reward_scales = train_config['reward_scales']
@@ -14,7 +27,15 @@ class WildAnymal:
         self.joint_target_t_1 = None
         self.joint_target_t_2 = None
 
-    def __call__(self, curriculum_factor: float = 1.0):
+    def __call__(self, curriculum_factor: float = 1.0) -> torch.Tensor:
+        """Compute reward.
+
+        Args:
+            curriculum_factor (float, optional): Curriculum factor. Defaults to 1.0.
+
+        Returns:
+            torch.Tensor: Reward of shape (num_envs,)
+        """
 
         v_des = self.env.get_desired_velocity()
         v_act = self.env.get_actual_velocity()
@@ -34,12 +55,12 @@ class WildAnymal:
         # we need a way get multiple positions around the foot
         # get foot heights
         h = self.env.get_rb_position(
-        )[:, self.robot_config['foot_indecies'], 2]
+        )[:, self.robot_config['foot_indices'], 2]
         reward += self.reward_scales['foot_clearance'] * foot_clearance(h)
 
         # get positions of the shank and knee from config
-        rigid_bodies = self.robot_config['shank_indecies'].extend(
-            self.robot_config['knee_indecies'])
+        rigid_bodies = self.robot_config['shank_indices'].extend(
+            self.robot_config['knee_indices'])
         contact_states = self.env.get_contact_states()[:, rigid_bodies]
         reward += self.reward_scales['shank_knee_col'] * \
             shank_or_knee_col(contact_states, curriculum_factor)
@@ -58,7 +79,7 @@ class WildAnymal:
         # We only set a threshold for the knee joints.
         joint_positions = self.env.get_joint_positions()
         knee_joint_positions = joint_positions[:,
-                                               self.robot_config['knee_indecies']]
+                                               self.robot_config['knee_indices']]
         reward += self.reward_scales['joint_constraint'] * \
             joint_constraint(knee_joint_positions, self.knee_threshold)
 
@@ -81,11 +102,11 @@ class WildAnymal:
 
         # get what feet are in contact with the ground
         feet_contact = self.env.get_contact_states(
-        )[:, self.robot_config['foot_indecies']]
+        )[:, self.robot_config['foot_indices']]
 
         # get the velocity of each foot
         feet_velocity = self.env.get_rb_velocity(
-        )[:, self.robot_config['foot_indecies']]
+        )[:, self.robot_config['foot_indices']]
 
         reward += self.reward_scales['slip'] * \
             slip(feet_contact, feet_velocity, curriculum_factor)
