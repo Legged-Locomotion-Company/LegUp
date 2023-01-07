@@ -3,17 +3,24 @@ import torch
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
-def invert_ht_batch(ht):
+def invert_ht_batch(ht, out=None):
     """Inverts a 3d 4x4 homogenous transform. Using this function is a lot better because it does not need the iterative algorithm that is used in regular matrix inversion.
 
     Args:
         ht (torch.Tensor): A (NUM_ENVS x 4 x 4) stack of homogenous transforms
+        out (torch.Tensor, optional): A (NUM_ENVS x 4 x 4) tensor to store the result in. Defaults to None.
 
     Returns:
         torch.Tensor: A (NUM_ENVS x 4 x 4) stack of inverted homogenous transforms. Will be equal to torch.invert(ht) for each ht
     """
 
-    NUM_ENVS, _, _ = ht.shape
+    NUM_ENVS = ht.shape[0]
+
+    if out is None:
+        out = torch.eye(4, device=device).repeat(NUM_ENVS, 1, 1)
+
+    elif out.shape != (NUM_ENVS, 4, 4):
+        raise ValueError("Out must be a (NUM_ENVS x 4 x 4) tensor.")
 
     inverted = torch.eye(4, device=device).repeat(NUM_ENVS, 1, 1)
 
@@ -29,59 +36,63 @@ def invert_ht(ht):
     """Inverts a 3d 4x4 homogenous transform. Using this function is a lot better because it does not need the iterative algorithm that is used in regular matrix inversion.
 
     Args:
-        ht (torch.Tensor): The homogenous transform
+        ht (torch.Tensor): A (4x4) matrix representing the homogenous transform
 
     Returns:
-        torch.Tensor: returns the inverted homogenous transform. Will be equal to torch.invert(ht)
+        torch.Tensor: A (4 x 4) matrix representing the inverted homogenous transform. Will be equal to torch.invert(ht) for each ht
     """
 
-    inverted = torch.eye(4, device=device)
+    out = torch.eye(4, device=device)
 
-    # TODO This sucks make it better
-    inverted[:3, :3] = ht.T[:3, :3]
-    inverted[:3, 3] = - inverted[:3, :3] @ ht[:3, 3]
+    out[:3, :3] = out.T[:3, :3]
+    out[:3, 3] = - out[:3, :3] @ ht[:3, 3]
 
-    return inverted
-
-
-def xrot(theta):
-    sth = torch.sin(theta)
-    cth = torch.cos(theta)
-
-    result = torch.eye(4, device=device).repeat(len(theta), 1, 1)
-
-    result[:, 1, 1] = cth
-    result[:, 1, 2] = -sth
-    result[:, 2, 1] = sth
-    result[:, 2, 2] = cth
-
-    return result
+    return out
 
 
-def yrot(theta):
-    sth = torch.sin(theta)
-    cth = torch.cos(theta)
+def translation_ht_batch(vs, out=None):
+    """Creates a batch of 3d homogenous transform that translates by a vector
 
-    result = torch.eye(4, device=device).repeat(len(theta), 1, 1)
+    Args:
+        vs (torch.Tensor): A (NUM_ENVS x 3) tensor representing the translation vector
+        out (torch.Tensor, optional): A (NUM_ENVS x 4 x 4) tensor to store the result in. Defaults to None.
 
-    result[:, 0, 0] = cth
-    result[:, 0, 2] = sth
-    result[:, 2, 0] = -sth
-    result[:, 2, 2] = cth
+    Returns:
+        torch.Tensor: A (NUM_ENVS x 4 x 4) tensor representing the homogenous transform
+    """
+    NUM_ENVS, _ = vs.shape
 
-    return result
+    if out is None:
+        out = torch.eye(4, device=device).repeat(NUM_ENVS, 1, 1)
+    elif out.shape != (NUM_ENVS, 4, 4):
+        raise ValueError("Out must be a (NUM_ENVS x 4 x 4) tensor.")
+    else:
+        out[:] = torch.eye(3, device=device)
+
+    out[:, 0, 3] = vs[:, 0]
+    out[:, 1, 3] = vs[:, 1]
+    out[:, 2, 3] = vs[:, 2]
+
+    return out
 
 
-def translation_ht(x, y, z, NUM_ENVS=None):
-    # if NUM_ENVS == None:
-    #     NUM_ENVS, = len(x)
-    # pos = torch.tensor([x, y, z], device= device)
+def translation_ht(v):
+    """Creates a 3d homogenous transform that translates by a vector
 
-    ht = torch.eye(4, device=device)
-    ht[0, 3] = x
-    ht[1, 3] = y
-    ht[2, 3] = z
-    return ht
+    Args:
+        v (torch.Tensor): A (3) tensor representing the translation vector
+
+    Returns:
+        torch.Tensor: A (4 x 4) tensor representing the homogenous transform
+    """
+
+    out = torch.eye(4, device=device)
+
+    out[0, 3] = v[0]
+    out[1, 3] = v[1]
+    out[2, 3] = v[2]
+
+    return out
 
 
 def skew_symmetric(omega):
@@ -93,7 +104,6 @@ def skew_symmetric(omega):
     Returns:
         torch.Tensor: A (3 x 3) tensor representing a skew symmteric matrix
     """
-    # NUM_ENVS, _ = omega.shape
 
     result = torch.zeros((3, 3), device=device)
 
@@ -107,27 +117,33 @@ def skew_symmetric(omega):
     return result
 
 
-def skew_symmetric_batch(omegas):
+def skew_symmetric_batch(omegas, out=None):
     """Converts a 3d vector to a skew symmetric matrix
 
     Args:
         omega (torch.Tensor): A (NUM_ENVS x 3) element vector representing a stack of 3d vectors
+        out (torch.Tensor, optional): A (NUM_ENVS x 3 x 3) tensor to store the result in. Defaults to None.
 
     Returns:
         torch.Tensor: A (NUM_ENVS x 3 x 3) tensor representing a stack of skew symmetric matrices
     """
-    NUM_ENVS, _ = omegas.shape
+    NUM_ENVS = omegas.shape[0]
 
-    result = torch.zeros((NUM_ENVS, 3, 3), device=device)
+    if out is None:
+        out = torch.zeros((NUM_ENVS, 3, 3), device=device)
+    elif out.shape != (NUM_ENVS, 3, 3):
+        raise ValueError("Out must be a (NUM_ENVS x 3 x 3) tensor.")
+    else:
+        out[:, :, :] = 0.0
 
-    result[:, 0, 1] = -omegas[:, 2]
-    result[:, 0, 2] = omegas[:, 1]
-    result[:, 1, 0] = omegas[:, 2]
-    result[:, 1, 2] = -omegas[:, 0]
-    result[:, 2, 0] = -omegas[:, 1]
-    result[:, 2, 1] = omegas[:, 0]
+    out[:, 0, 1] = -omegas[:, 2]
+    out[:, 0, 2] = omegas[:, 1]
+    out[:, 1, 0] = omegas[:, 2]
+    out[:, 1, 2] = -omegas[:, 0]
+    out[:, 2, 0] = -omegas[:, 1]
+    out[:, 2, 1] = omegas[:, 0]
 
-    return result
+    return out
 
 
 def unskew(skew):
@@ -151,49 +167,81 @@ def unskew(skew):
     return result
 
 
-def screwvec_to_mat(screws):
+def screwvec_to_mat(screw):
     """Converts a screw axis to the matrix form
     Page 104 of MR
 
     Args:
+        screw (torch.Tensor): A (6) element vector representing a screw axis
+
+    Returns:
+        torch.Tensor: A (4 x 4) tensor representing a screw matrix
+    """
+
+    out = torch.zeros((4, 4), device=device)
+
+    out[:3, :3] = skew_symmetric(screw[:3])
+    out[:3, 3] = screw[3:]
+    out[3, 3] = 0.0
+
+    return out
+
+
+def screwvec_to_mat_batch(screws, out=None):
+    """Converts a screw axis to the matrix form WARNING UNTESTED TODO: Actually implement this
+    Page 104 of MR
+
+    Args:
         screws (torch.Tensor): A (NUM_ENVS x 6) element vector representing a stack of screw axes
-        thetas (torch.Tensor): A (NUM_ENVS) element vector representing a stack of screw angles
+        out (torch.Tensor, optional): A (NUM_ENVS x 4 x 4) tensor to store the result in. Defaults to None.
 
     Returns:
         torch.Tensor: A (NUM_ENVS x 4 x 4) tensor representing a stack of screw matrices
     """
 
-    # NUM_ENVS, _ = screws.shape
+    NUM_ENVS = screws.shape[0]
+
+    if out is None:
+        out = torch.zeros((NUM_ENVS, 4, 4), device=device)
+    elif out.shape != (NUM_ENVS, 4, 4):
+        raise ValueError("Out must be a (NUM_ENVS x 4 x 4) tensor.")
+    else:
+        out[:, :, :] = 0.0
 
     twist = screws[:3]
     v = screws[3:]
 
-    result = torch.zeros((4, 4), device=device)
-    result[:3, :3] = skew_symmetric(twist)
-    result[:3, 3] = v
+    out[:3, :3] = skew_symmetric(twist)
+    out[:3, 3] = v
 
-    return result
+    return out
 
 
-def ht_adj_batch(T):
+def ht_adj_batch(T, out=None):
     """Computes the adjoint of a homogenous transform
 
     Args:
         T (torch.Tensor): A (NUM_ENVS x 4 x 4) tensor representing a stack of homogenous transforms
+        out (torch.Tensor, optional): A (NUM_ENVS x 6 x 6) tensor to store the result in. Defaults to None.
 
     Returns:
         torch.Tensor: A (NUM_ENVS x 6 x 6) tensor representing a stack of adjoints
     """
 
-    NUM_ENVS, _, _ = T.shape
+    NUM_ENVS = T.shape[0]
 
-    result = torch.zeros((NUM_ENVS, 6, 6), device=device)
+    if out is None:
+        out = torch.zeros((NUM_ENVS, 6, 6), device=device)
+    elif out.shape != (NUM_ENVS, 6, 6):
+        raise ValueError("Out must be a (NUM_ENVS x 6 x 6) tensor.")
+    else:
+        out[:, :, :] = 0.0
 
-    result[:, :3, :3] = T[:, :3, :3]
-    result[:, :3, 3:] = skew_symmetric_batch(T[:, :3, 3]) @ T[:, :3, :3]
-    result[:, 3:, 3:] = T[:, :3, :3]
+    out[:, :3, :3] = T[:, :3, :3]
+    out[:, :3, 3:] = skew_symmetric_batch(T[:, :3, 3]) @ T[:, :3, :3]
+    out[:, 3:, 3:] = T[:, :3, :3]
 
-    return result
+    return out
 
 
 def ht_adj(T):
@@ -217,45 +265,56 @@ def ht_adj(T):
     return result
 
 
-def screwmat_to_ht(screwmats, thetas):
-    """Converts a screw axis matrix and magnitude to a homogenous transform
+def screwmat_to_ht_batch(screwmat, thetas, out=None):
+    """Converts a screw axis matrix and magnitude to a homogenous transform. Should be equivalent to expm(screwmat * thetas)
 
     Args:
-        screwmats (torch.Tensor): A (4 x 4) tensor representing a screw matrix
+        screwmat (torch.Tensor): A (4 x 4) tensor representing a screw matrix
         thetas (torch.Tensor): A (NUM_ENVS) element vector representing a stack of screw angles
 
     Returns:
         torch.Tensor: A (NUM_ENVS x 4 x 4) tensor representing a stack of homogenous transforms
     """
 
-    NUM_ENVS = len(thetas)
+    NUM_ENVS = thetas.shape[0]
 
-    result = torch.zeros((NUM_ENVS, 4, 4), device=device)
+    if out is None:
+        out = torch.zeros((NUM_ENVS, 4, 4), device=device)
+    elif out.shape != (NUM_ENVS, 4, 4):
+        raise ValueError("Out must be a (NUM_ENVS x 4 x 4) tensor.")
+    else:
+        out[:, :, :] = 0.0  # torch.eye(4, device=device)
 
-    twist_skew = screwmats[:3, :3]
-    v = screwmats[:3, 3]
+    twist_skew = screwmat[:3, :3]
+    v = screwmat[:3, 3]
 
     twist = unskew(twist_skew)
 
-    result = torch.eye(4, device=device).repeat(NUM_ENVS, 1, 1)
-
     if (not twist.norm().allclose(torch.tensor(0.0, device=device))):
-        result[:, :3, :3] = twist_skew_to_rot(twist_skew, thetas)
+        scratch = out[:, :3, :3]
+        # Term 1
+        scratch = torch.eye(3, device=device).expand(
+            NUM_ENVS, 3, 3) * thetas.expand(3, 3, -1).tranpose(0, -1)
 
-        # TODO: Fix this garbage
-        term1 = torch.eye(3, device=device).expand(NUM_ENVS, 3, 3) * thetas.repeat(3,3,1).transpose(-1,0).expand(NUM_ENVS,3,3)
-        term2 = (1 - torch.cos(thetas)).repeat(3,3,1).transpose(-1,0).expand(NUM_ENVS,3,3) * twist_skew.expand(NUM_ENVS, 3, 3)
-        term3 = (thetas - torch.sin(thetas)).repeat(3,3,1).transpose(-1,0).expand(NUM_ENVS,3,3) * \
+        # Term 2
+        scratch += (1 - torch.cos(thetas)).expand(3, 3, -
+                                                  1).transpose(0, -1) * twist_skew.expand(NUM_ENVS, 3, 3)
+
+        # Term 3
+        scratch += (thetas - torch.sin(thetas)).expand(3, 3, 1).transpose(-1, 0) * \
             (twist_skew @ twist_skew).expand(NUM_ENVS, 3, 3)
 
-        result[:, :3, 3] = torch.einsum(
-            'Bij,j->Bi', (term1 + term2 + term3), v)
+        torch.matmul(scratch, v.expand(NUM_ENVS, 3, 1), out=out[:, :3, 3])
+
+        out[:, :3, :3] = twist_skew_to_rot(twist_skew, thetas)
+        out[:, 3, 3] = 1.0
 
     else:
         # TODO: Fix this garbage
-        result[:, :3, 3] = v.expand(NUM_ENVS,3) * thetas.repeat(3,1).transpose(-1,0).expand(NUM_ENVS,3)
+        out[:, :3, 3] = v.expand(
+            NUM_ENVS, 3) * thetas.expand(3, -1).transpose(-1, 0)
 
-    return result
+    return out
 
     # rotation = twists.norm(dim=1) != 0
     # no_rotation = twists.norm(dim=1) == 0
@@ -277,7 +336,7 @@ def screwmat_to_ht(screwmats, thetas):
     # return result
 
 
-def screw_to_ht(screws, thetas):
+def screwvec_to_ht_batch(screws, thetas, out=None):
     """Converts a screw axis to a homogenous transform
     This is equivalent to the matrix exponential of the skew symmetric matrix of the screw axis times the theta
 
@@ -289,9 +348,9 @@ def screw_to_ht(screws, thetas):
         torch.Tensor: A (NUM_ENVS x 4 x 4) tensor representing a stack of homogenous transforms
     """
 
-    screwmats = screwvec_to_mat(screws)
+    screwmats = screwvec_to_mat_batch(screws)
 
-    return screwmat_to_ht(screwmats, thetas)
+    return screwmat_to_ht_batch(screwmats, thetas)
 
 
 def twist_skew_to_rot(twist_skew, thetas):
@@ -309,8 +368,9 @@ def twist_skew_to_rot(twist_skew, thetas):
 
     term1 = torch.eye(3, device=device)
     # this line is so bad omg
-    term2 = torch.sin(thetas).repeat(3,3,1).transpose(-1,0).expand(NUM_ENVS,3,3) * twist_skew.expand(NUM_ENVS, 3, 3)
-    term3 = (1 - torch.cos(thetas).repeat(3,3,1).transpose(-1,0).expand(NUM_ENVS,3,3)) * \
+    term2 = torch.sin(thetas).repeat(3, 3, 1).transpose(-1,
+                                                        0).expand(NUM_ENVS, 3, 3) * twist_skew.expand(NUM_ENVS, 3, 3)
+    term3 = (1 - torch.cos(thetas).repeat(3, 3, 1).transpose(-1, 0).expand(NUM_ENVS, 3, 3)) * \
         (twist_skew @ twist_skew).expand(NUM_ENVS, 3, 3)
 
     return term1 + term2 + term3
