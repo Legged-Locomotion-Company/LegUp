@@ -1,14 +1,25 @@
 from rlloco.isaac.environment import IsaacGymEnvironment
 
+from typing import Union, List, Tuple
+
 import gym
 import torch
 import numpy as np
 import torchgeometry as tgm
 from stable_baselines3.common.vec_env import VecEnv
 
-
 class HistoryBuffer:
-    def __init__(self, num_envs, dt, update_freq, history_size, data_size, device):
+    """Buffer to store most recently updated data that is updated every few seconds"""
+    def __init__(self, num_envs: int, dt: float, update_freq: int, history_size: int, data_size: int, device: torch.device):
+        """
+        Args:
+            num_envs (int): number of environments to store data for
+            dt (float): `dt` that the simulator is using, this essentially is the time (seconds) between each successive `step` call
+            update_freq (int): how often (in seconds) to update the data in the buffer
+            history_size (int): how much data to store in the buffer
+            data_size (int): size of the data we are storing -- data must be 1-dimensional
+            device (torch.device): device (cpu/cuda) that data should be on
+        """
         self.device = device
         self.dt = dt
         self.update_freq = update_freq
@@ -18,7 +29,12 @@ class HistoryBuffer:
         self.elapsed_time = torch.zeros(num_envs).to(self.device)
         self.data = torch.zeros(num_envs, data_size, history_size).to(self.device)
     
-    def step(self, new_data):
+    def step(self, new_data: torch.Tensor):
+        """Updates the buffer if enough time has elapsed (specified by `dt`) from the previous call
+
+        Args:
+            new_data (torch.Tensor): Most recent data to be added if time has passed
+        """
         self.elapsed_time += self.dt
 
         update_idx = self.elapsed_time >= self.update_freq
@@ -27,17 +43,36 @@ class HistoryBuffer:
         self.data[update_idx, :, :self.history_size - 1] = self.data[update_idx, :, 1:]
         self.data[update_idx, :, 0] = new_data[update_idx, :] # 0 is the newest
     
-    def get(self, idx):
+    def get(self, idx: Union[int, List[int]]) -> torch.Tensor:
+        """Gets the data at the specified index
+
+        Args:
+            idx (Union[int, List[int]]): index of data, can be list or int
+
+        Returns:
+            torch.Tensor: data at that index, shape `(num_envs, data_size, :)`
+        """
         return self.data[:, :, idx]
     
-    def flatten(self):
+    def flatten(self) -> torch.Tensor:
+        """Gets all the data in the buffer, flattened
+
+        Returns:
+            torch.Tensor: flattened data in buffer, shape `(num_envs, data_size * history_size)`
+        """
         return self.data.view(self.num_envs, -1)
 
-    def reset(self, update_idx):
+    def reset(self, update_idx: Union[int, List[int]]):
+        """Zeros out all data in the buffer
+
+        Args:
+            update_idx (Union[int, List[int]]): indices of data to zero out
+        """
         self.elapsed_time[update_idx] = 0
         self.data[update_idx, :, :] = 0
 
 class G:
+    """Random constants used in the paper"""
     action_scale = 0.1
     des_foot_height = 0.09
 
@@ -56,7 +91,16 @@ class G:
     k_base = -1.5
 
 class ConcurrentTrainingEnv(VecEnv):
-    def __init__(self, num_environments, asset_path, asset_name):
+    """Implementation of an agent that learns a simple locomotion policy for the mini-cheetah. This entire implementation was based off of
+    the following paper: https://arxiv.org/abs/2202.05481. It is hardcoded to run on GPU.
+    """
+    def __init__(self, num_environments: int, asset_path: str, asset_name: str):
+        """
+        Args:
+            num_environments (int): number of parallel environments to create in simulator
+            asset_path (str): path to URDF file from `asset_root`
+            asset_root (str): root folder where the URDF to load is
+        """
         self.device = torch.device("cuda")
 
         self.all_envs = list(range(num_environments))
@@ -80,49 +124,43 @@ class ConcurrentTrainingEnv(VecEnv):
         self.joint_vel_hist = HistoryBuffer(num_environments, self.dt, 0.02, 3, 12, self.device)
 
         # OpenAI Gym Environment required fields
-        #self.observation_space = gym.spaces.Box(low = np.ones(153) * -np.Inf, high = np.ones(153) * np.Inf, dtype = np.float32)
-        #self.action_space = gym.spaces.Box(low = np.ones(12) * -np.Inf, high = np.ones(12) * np.Inf, dtype = np.float32)
         self.observation_space = gym.spaces.Box(low = np.ones(153) * -10000000, high = np.ones(153) * 10000000, dtype = np.float32)
         self.action_space = gym.spaces.Box(low = np.ones(12) * -10000000, high = np.ones(12) * 10000000, dtype = np.float32)
         self.metadata = {"render_modes": ['rgb_array']}
         self.reward_range = (-float("inf"), float("inf"))
         self.spec = None
 
-    
-    def sq_norm(self, tensor, dim = -1):
+    def sq_norm(self, tensor: torch.Tensor, dim: int = -1):
+        """Helper function to compute sqrt(norm(x)) without actually doing norm, thus avoiding the sqrt
+
+        Args:
+            tensor (torch.Tensor): input tensor to norm
+            dim (int, optional): dimension to compute norm over. Defaults to -1.
+
+        Returns:
+            torch.Tensor: sqrt(norm(x)) of given tensor
+        """
         return torch.sum(torch.pow(tensor, 2), dim = dim)
 
-    def make_observation_and_reward(self, actions):
-        root_quat = self.env.get_rotation() # (num_envs, 4)
-        root_ang_vel = self.env.get_angular_velocity() # (num_envs, 3)
-        joint_pos = self.env.get_joint_position() # (num_envs, 12)
-        joint_vel = self.env.get_joint_velocity() # (num_envs, 12)
-        des_jpos_t1 = self.des_joint_pos_hist.get(0) # (num_envs, 12)
-        des_jpos_t2 = self.des_joint_pos_hist.get(1) # (num_envs, 12)
-        Q_err_hist = self.joint_pos_err_hist.flatten() # (num_envs, 36)
-        Q_vel_hist = self.joint_vel_hist.flatten() # (num_envs, 36)
-        
-        feet_pos = self.env.get_rb_position()[:, self.feet_idx, :]
-        body_pos = self.env.get_rb_position()[:, [0], :]
-        relative_feet_pos = feet_pos - body_pos
-        relative_feet_pos = relative_feet_pos.view(-1, 12) # (num_envs, 12)
-        command = self.cmd # (num_envs, 3)
+    def make_reward(self, root_quat, root_ang_vel, joint_pos, joint_vel, des_jpos_t1, des_jpos_t2, command, root_lin_vel, foot_height, contact_probs, actions) -> torch.Tensor:
+        """Computes the reward as per the paper https://arxiv.org/abs/2202.05481, refer to the paper for the formulas and descriptions of the rewards. 
 
-        # this stuff should be estimated but we're starting with perfect info
-        root_lin_vel = self.env.get_linear_velocity() # (num_envs, 3)
-        foot_height = feet_pos[:, :, 2] # (num_envs, 4), assuming flat ground
-        contact_probs = self.env.get_contact_states()[:, self.feet_idx] # (num_envs, 4)
+        Args:
+            root_quat (torch.Tensor): Robot rotation as a quaternion, shape `(num_envs, 4)`
+            root_ang_vel (torch.Tensor): Robot angular velocity, shape `(num_envs, 3)`
+            joint_pos (torch.Tensor): Robot joint position, shape `(num_envs, num_degrees_of_freedom)`
+            joint_vel (torch.Tensor): Robot joint velocity, shape `(num_envs, num_degrees_of_freedom)`
+            des_jpos_t1 (torch.Tensor): Desired joint position from timestep `t-1`, shape `(num_envs, num_degrees_of_freedom)`
+            des_jpos_t2 (torch.Tensor): Desired joint position from timestep `t-2`, shape `(num_envs, num_degrees_of_freedom)`
+            command (torch.Tensor): Robot target x/y position command and angular velocity command, shape `(num_envs, 3)`
+            root_lin_vel (torch.Tensor): robot root linear velocity, shape `(num_envs, 3)`
+            foot_height (torch.Tensor): robot foot height, shape `(num_envs, 4)`. Currently does not factor in uneven terrain and is relative to the robot base
+            contact_probs (torch.Tensor): probability that a given foot is on the ground, shape `(num_envs, 4)`
+            actions (torch.Tensor): action that was commanded previously, shape `(num_envs, num_degrees_of_freedom)`
 
-        reward = None
-        if actions is not None:
-            reward = self.make_reward(root_quat, root_ang_vel, joint_pos, joint_vel, des_jpos_t1, des_jpos_t2, Q_err_hist, Q_vel_hist, relative_feet_pos, command, root_lin_vel, foot_height, contact_probs, actions)
-
-        obs_list = [root_quat, root_ang_vel, joint_pos, joint_vel, des_jpos_t1, des_jpos_t2, Q_err_hist, Q_vel_hist, relative_feet_pos, command, root_lin_vel, foot_height, contact_probs]
-        obs = torch.cat(obs_list, dim = 1) # (num_envs, 153)
-
-        return obs, reward
-        
-    def make_reward(self, root_quat, root_ang_vel, joint_pos, joint_vel, des_jpos_t1, des_jpos_t2, Q_err_hist, Q_vel_hist, relative_feet_pos, command, root_lin_vel, foot_height, contact_probs, actions):
+        Returns:
+            torch.Tensor: final computed reward for each environment, shape `(num_envs)`
+        """
         r_v = G.k_v * torch.exp(-self.sq_norm(command[:, :2] - root_lin_vel[:, :2]))
 
         r_w = G.k_w * torch.exp(-1.5 * self.sq_norm(command[:, [2]] - root_lin_vel[:, [2]]))
@@ -160,13 +198,58 @@ class ConcurrentTrainingEnv(VecEnv):
 
         return r_tot      
 
-    def check_termination(self):
+    def make_observation_and_reward(self, actions: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Makes observation from simulation environment and computes the reward from the observations and action
+
+        Args:
+            actions (torch.Tensor): Previously commanded target joint position, shape `(num_envs, num_degrees_of_freedom)`
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor]: Newest observation of shape `(num_envs, observation_space)` and respective reward of shape `(num_envs)`
+        """
+        root_quat = self.env.get_rotation() # (num_envs, 4)
+        root_ang_vel = self.env.get_angular_velocity() # (num_envs, 3)
+        joint_pos = self.env.get_joint_position() # (num_envs, 12)
+        joint_vel = self.env.get_joint_velocity() # (num_envs, 12)
+        des_jpos_t1 = self.des_joint_pos_hist.get(0) # (num_envs, 12)
+        des_jpos_t2 = self.des_joint_pos_hist.get(1) # (num_envs, 12)
+        Q_err_hist = self.joint_pos_err_hist.flatten() # (num_envs, 36)
+        Q_vel_hist = self.joint_vel_hist.flatten() # (num_envs, 36)
+        
+        feet_pos = self.env.get_rb_position()[:, self.feet_idx, :]
+        body_pos = self.env.get_rb_position()[:, [0], :]
+        relative_feet_pos = feet_pos - body_pos
+        relative_feet_pos = relative_feet_pos.view(-1, 12) # (num_envs, 12)
+        command = self.cmd # (num_envs, 3)
+
+        # this stuff should be estimated but we're starting with perfect info
+        root_lin_vel = self.env.get_linear_velocity() # (num_envs, 3)
+        foot_height = feet_pos[:, :, 2] # (num_envs, 4), assuming flat ground
+        contact_probs = self.env.get_contact_states()[:, self.feet_idx] # (num_envs, 4)
+
+        reward = None
+        if actions is not None:
+            reward = self.make_reward(root_quat, root_ang_vel, joint_pos, joint_vel, des_jpos_t1, des_jpos_t2, command, root_lin_vel, foot_height, contact_probs, actions)
+
+        obs_list = [root_quat, root_ang_vel, joint_pos, joint_vel, des_jpos_t1, des_jpos_t2, Q_err_hist, Q_vel_hist, relative_feet_pos, command, root_lin_vel, foot_height, contact_probs]
+        obs = torch.cat(obs_list, dim = 1) # (num_envs, 153)
+
+        return obs, reward
+
+    def check_termination(self) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Checks if any environments have terminated (because of collisions) or truncated (ran out of time)
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor]: Both tensors are truthy tensors of shape `(num_envs)`, they represent which environments have
+            terminated or truncated (respectively)
+        """
         term = torch.any(self.env.get_contact_states()[:, self.term_contacts], dim = -1)
         trunc = self.ep_lens > self.max_ep_len
 
         return term, trunc
 
     def update_feet_states(self):
+        """Called at every simulation step, updates the tracking buffers for feet states"""
         feet_contacts = self.env.get_contact_states()[:, self.feet_idx]
         self.takeoff_time[feet_contacts] += self.dt
         self.touchdown_time[feet_contacts] = 0
@@ -174,7 +257,15 @@ class ConcurrentTrainingEnv(VecEnv):
         self.takeoff_time[~feet_contacts] = 0
         self.touchdown_time[~feet_contacts] += self.dt
 
-    def reset_partial(self, env_idx):
+    def reset_partial(self, env_idx: Union[torch.Tensor, List[int], int]) -> torch.Tensor:
+        """Resets a subset of all environments, specified by `env_idx`
+
+        Args:
+            env_idx (Union[torch.Tensor, List[int], int]): Indices of environments to reset
+
+        Returns:
+            torch.Tensor: New observations from the environments that were reset
+        """
         self.takeoff_time[env_idx] = 0
         self.touchdown_time[env_idx] = 0
         self.ep_lens[env_idx] = 0
@@ -189,10 +280,25 @@ class ConcurrentTrainingEnv(VecEnv):
         obs, _ = self.make_observation_and_reward(None)
         return obs[env_idx]
 
-    def reset(self):
+    def reset(self) -> torch.Tensor:
+        """Resets all environments. From what I understand, this is really only called once (at the beginning)
+
+        Returns:
+            torch.Tensor: New observations from all environments
+        """
         return self.reset_partial(self.all_envs)
 
-    def step(self, actions):
+    def step(self, actions: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict]:
+        """Does a single step of the simulation environment based on a given command, and computes new state information and rewards
+
+        Args:
+            actions (torch.Tensor): Commanded joint position, shape `(num_envs, num_degrees_of_freedom)`
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict]: new observation, corresponding reward, truthy tensor of which 
+            environments have terminated/truncated, and additional metadata (currently empty). Observation tensor has shape `(num_envs, observation_space)`
+            and all other tensors have shape `(num_envs)`
+        """
         self.prev_joint_pos[:] = self.env.get_joint_position()
 
         actions = actions * G.action_scale + self.default_dof_pos
@@ -225,29 +331,42 @@ class ConcurrentTrainingEnv(VecEnv):
         infos = [{} for _ in range(self.num_envs)]
         return new_obs, reward, torch.logical_or(term, trunc), infos       
 
-    def render(self):
+    def render(self) -> torch.Tensor:
+        """Gets a screenshot from simulation environment as torch tensor
+
+        Returns:
+            torch.Tensor: RGBA screenshot from sim, shape `(height, width, 4)`
+        """
         return self.env.render()
 
     def env_is_wrapped(self, wrapper_class, indices = None):
+        """Added because it is required as per the OpenAI gym specification"""
         return [False]
 
     def close(self):
+        """Added because it is required as per the OpenAI gym specification"""
         raise NotImplementedError
 
     def env_method(self, method_name, *method_args, indices=None, **method_kwargs):
+        """Added because it is required as per the OpenAI gym specification"""
         raise NotImplementedError
 
     def get_attr(self, attr_name, indices=None):
+        """Added because it is required as per the OpenAI gym specification"""
         raise NotImplementedError
 
     def seed(self, seed = None):
+        """Added because it is required as per the OpenAI gym specification"""
         raise NotImplementedError
 
     def set_attr(self, attr_name, value, indices=None):
+        """Added because it is required as per the OpenAI gym specification"""
         raise NotImplementedError
 
     def step_async(self, actions):
+        """Added because it is required as per the OpenAI gym specification"""
         raise NotImplementedError
 
     def step_wait(self):
+        """Added because it is required as per the OpenAI gym specification"""
         raise NotImplementedError
