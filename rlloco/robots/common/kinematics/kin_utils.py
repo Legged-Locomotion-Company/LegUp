@@ -166,6 +166,7 @@ def unskew(skew):
 
     return result
 
+
 def screwvec_to_mat(screw):
     """Converts a screw axis to the matrix form
     Page 104 of MR
