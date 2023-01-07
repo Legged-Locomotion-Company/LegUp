@@ -1,3 +1,5 @@
+from kin_utils import screw_axis
+
 def Kinematics:
     """
     This class precalculates the necessary basics for the robot kinematics,
@@ -36,16 +38,34 @@ class RobotLink:
 
 class RobotJoint:
     """
-    This class stores a joint of the robot with child links
+    This class stores a joint of the robot with a child link and a position
     """
 
-    def __init__(self, chid_link, joint_screw_ax, joint_ht):
+    def __init__(self, child_link, joint_screw_ax):
         """This function initializes the joint
 
         Args:
-            chid_link (RobotLink): The child link of the joint
+            child_link (RobotLink): The child link of the joint
             joint_screw_ax (torch.Tensor): a (6) vector containing the screw axis of the joint
-            joint_ht (torch.Tensor): a (6) vector containing the twist vector of the joint
         """
 
-        self.structure = []
+        self.child_link = child_link
+        self.screw_ax = joint_screw_ax
+
+class RobotJointRev(RobotJoint):
+    """
+    This class stores a revolute joint of the robot with a child link and a position
+    """
+
+    def __init__(self, child_link, ax, origin):
+        """This function initializes the joint
+
+        Args:
+            child_link (RobotLink): The child link of the joint
+            ax (torch.Tensor): a (3) vector containing the axis of the joint
+            origin (torch.Tensor): a (3) vector containing the origin of the joint
+        """
+
+        screw_ax = screw_axis(origin, ax)
+
+        super().__init__(child_link, screw_ax)
