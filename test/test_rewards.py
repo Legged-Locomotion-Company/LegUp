@@ -16,7 +16,6 @@ def test_confirm_reward_velocity_dimensions(num_envs):
     assert lin_v_shape == torch.Size(
         [num_envs, ]), "lin_velocity should be shape ({num_envs},), but is {lin_v_shape}".format(num_envs=num_envs, lin_v_shape=lin_v_shape)
 
-    # issue with ang_velocity
     ang_v_shape = ang_velocity(torch.rand(
         [num_envs, 1]), torch.rand([num_envs, 1])).shape
     assert ang_v_shape == torch.Size(
@@ -66,7 +65,6 @@ def test_confirm_reward_movement_dimensions(num_envs):
     Confirm that the reward dimensions are correct.
     """
 
-    # Issue here
     body_motion_shape = body_motion(torch.rand([num_envs, 1]), torch.rand(
         [num_envs, 1]), torch.rand([num_envs, 1])).shape
     assert body_motion_shape == torch.Size([num_envs, ]), "body_motion should be shape ({num_envs},), but is {body_motion_shape}".format(
