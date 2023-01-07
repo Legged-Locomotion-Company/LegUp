@@ -1,6 +1,7 @@
 import torch
 
-from rlloco.robots.common.kinematics.inv_kin_algs import dls_invkin
+from rlloco.robots.common.kinematics.kin_utils import invert_ht, invert_ht_batch, translation_ht, screwvec_to_ht, ht_adj, ht_adj_batch, screwvec_to_mat_batch, screwmat_to_ht_batch, screw_axis
+from rlloco.robots.common.kinematics.inv_kin_algs import dls_invkin, pinv_invkin
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
