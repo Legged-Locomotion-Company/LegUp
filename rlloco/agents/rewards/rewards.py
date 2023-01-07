@@ -49,8 +49,6 @@ def ang_velocity(w_des_yaw, w_act_yaw):
     Returns:
         torch.Tensor: the reward for each env of shape (num_envs,)
     """
-    w_act_yaw = w_act_yaw  # (num_envs,)
-    w_des_yaw = w_des_yaw  # (num_envs,)
 
     # dot product = elementwise multiplication since w_des_yaw and w_act_yaw are 1D
     dot_w_des_w_act = w_des_yaw * w_act_yaw
