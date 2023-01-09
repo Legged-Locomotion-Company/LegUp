@@ -1,26 +1,26 @@
 from kin_utils import screw_axis
 
-# def Kinematics:
-#     """
-#     This class precalculates the necessary basics for the robot kinematics,
-#     and contains the functions that then do the kinematics
-#     """
+class Kinematics:
+    """
+    This class precalculates the necessary basics for the robot kinematics,
+    and contains the functions that then do the kinematics
+    """
 
-#     def __init__(self, base_link):
-#         """This function precalculates the basics for kinematics and unpacks the robot structure
+    def __init__(self, base_link):
+        """This function precalculates the basics for kinematics and unpacks the robot structure
 
-#         Args:
-#             robot_structure (RobotStructure): The robot structure of the robot
-#         """
+        Args:
+            robot_structure (RobotStructure): The robot structure of the robot
+        """
 
-#         self.joint_zero_transforms = []
+        self.joint_zero_transforms = []
 
-#         next_joint_idx = 0
+        next_joint_idx = 0
 
-#         for joint in robot_structure.joints:
-#             self.joint_zero_transforms.append(
-#                 joint.get_zero_transform(next_joint_idx))
-#             next_joint_idx += joint.num_dofs
+        for joint in base_link.joints:
+            self.joint_zero_transforms.append(
+                joint.get_zero_transform(next_joint_idx))
+            next_joint_idx += joint.num_dofs
 
 class RobotLink:
     """

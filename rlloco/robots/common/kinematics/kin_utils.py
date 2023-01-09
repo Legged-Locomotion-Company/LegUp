@@ -34,7 +34,7 @@ twist_skew_to_rot_batch
 twist_skew_to_rot: TODO
 
 twist_to_rot_batch
-twist_to_rot: TODO
+twist_to_rot:W TODO
 
 screw_axis_batch: TODO
 screw_axis
@@ -357,25 +357,6 @@ def screwmat_to_ht_batch(screwmat, thetas, out=None):
 
     return out
 
-    # rotation = twists.norm(dim=1) != 0
-    # no_rotation = twists.norm(dim=1) == 0
-
-    # twist_skew = skew_symmetric(twists)[rotation]
-
-    # result = torch.eye(4, device=device).repeat(NUM_ENVS, 1, 1)
-    # result[rotation, :3, :3] = twist_to_rot(twists, thetas)
-
-    # term1 = torch.eye(3, device=device).repeat(NUM_ENVS, 1, 1)[rotation] * thetas[rotation]
-    # term2 = (1 - torch.cos(thetas))[rotation] * twist_skews
-    # term3 = (thetas - torch.sin(thetas))[rotation] * twist_skews @ twist_skews
-
-    # result[rotation, :3, 3] =  torch.einsum('Bij,Bj->Bi', (term1 + term2 + term3), v)
-
-    # if (torch.sum(no_rotation) > 0):
-    #     result[no_rotation,:3,3] = v[no_rotation] * thetas[no_rotation]
-
-    # return result
-
 
 def screwmat_to_ht(screwmat, theta):
     """Converts a screw axis matrix and magnitude to a homogenous transform. Should be equivalent to expm(screwmat * theta)
@@ -482,27 +463,3 @@ def screw_axis(axis, q):
     result[3:] = torch.cross(-axis, q)
 
     return result
-
-
-def rot_to_twist(rot):
-    """Converts a rotation matrix to a twist axis
-    Args:
-        rot (torch.Tensor): A (NUM_ENVS x 3 x 3) element tensor representing a stack of rotation matrices
-    Returns:
-        torch.Tensor: A (NUM_ENVS x 3) tensor representing a stack of twist axes
-    """
-
-    # NOT SURE IF I NEED THIS, LEVING IT HERE IN CASE. NOT DOING IT CUZ IT'S ANNOYING
-
-    # NUM_ENVS, _, _ = rot.shape
-
-    # # batch trace
-    # trace = torch.einsum('Bii->B', rot)
-    # theta = torch.acos((trace - 1) / 2)
-
-    # omega_hat_skew = 1/ (2 * torch.sin(theta)) * (rot - rot.transpose(1, 2))
-    # omega_hat = unskew(omega_hat_skew)
-
-    # eye_mask = rot == torch.eye(3).expand(NUM_ENVS, 3, 3)
-
-    # return theta * omega_hat
