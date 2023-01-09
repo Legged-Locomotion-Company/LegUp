@@ -33,12 +33,12 @@ def test_mc_fk_j():
 
     jacobian, foot_pos = build_jacobian_and_fk(q, 0)
 
-    expected = torch.tensor([[[0.0000, -0.4025, 0.0000],
-                              [-0.0680,  0.0000,  0.1940],
+    expected = torch.tensor([[[0.0000, -0.4025, -0.1372],
+                              [-0.0680,  0.0000,  0.1372],
                               [0.4025,  0.0000,  0.0000]]], device=device)
 
-    # if (not jacobian[:, 3:].allclose(expected)):
-    #     return False
+    if (not jacobian[:, 3:].allclose(expected, 1e-3)):
+        return False
 
     q[0, 3] = -torch.pi/2
 
@@ -97,7 +97,7 @@ def test_mc_dls():
     def dist():
         _, foot_positions = build_jacobian_and_fk_all_feet(q)
 
-        error  = (foot_positions - goal_foot_pos)[1]
+        error = (foot_positions - goal_foot_pos)[1]
         per_foot_error_norms = error.norm(dim=-1)
         per_foot_mean_error = per_foot_error_norms.mean(dim=0)
 
@@ -109,12 +109,14 @@ def test_mc_dls():
     while dist() > 1e-5 and i < 100:
         q = mini_cheetah_dls_invkin(q, goal)
         i += 1
-    
+
     if (i < MAX_ITERS):
-        print(f"mini_cheetah_dls_invkin converged in {i} iterations: dist = {dist()}")
+        print(
+            f"mini_cheetah_dls_invkin converged in {i} iterations: dist = {dist()}")
         return True
     else:
-        print(f"mini_cheetah_dls_invkin did not converge in 1000 iterations. Final dist: {dist()}")
+        print(
+            f"mini_cheetah_dls_invkin did not converge in 1000 iterations. Final dist: {dist()}")
         return False
 
 

@@ -1,6 +1,6 @@
 from kin_utils import screw_axis
 
-def Kinematics:
+class Kinematics:
     """
     This class precalculates the necessary basics for the robot kinematics,
     and contains the functions that then do the kinematics
@@ -17,7 +17,7 @@ def Kinematics:
 
         next_joint_idx = 0
 
-        for joint in robot_structure.joints:
+        for joint in base_link.joints:
             self.joint_zero_transforms.append(
                 joint.get_zero_transform(next_joint_idx))
             next_joint_idx += joint.num_dofs
