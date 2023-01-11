@@ -1,6 +1,6 @@
 import torch
 
-from rlloco.robots.common.kinematics.kin_utils import xrot, yrot, invert_ht, invert_ht_batch, translation_ht, screw_to_ht, ht_adj, ht_adj_batch, screwvec_to_mat, screwmat_to_ht, screw_axis
+from rlloco.robots.common.kinematics.kin_utils import *
 from rlloco.robots.common.kinematics.inv_kin_algs import dls_invkin, pinv_invkin
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -23,24 +23,26 @@ def build_jacobian_and_fk(q_vec, leg):
 
     # Create the homogenous transforms for the joints in their zero position
     # [0.14775, 0.049, 0]
-    torso_to_hip_zero = translation_ht(
-        0.14775*front, 0.049*left, 0)
+    hip_to_torso_zero_v = torch.tensor([-0.14775*front, -0.049*left, 0])
+    hip_to_torso_zero_ht = translation_ht(hip_to_torso_zero_v)
+
     # [0.055, -0.019, 0]
-    hip_to_shoulder_zero = translation_ht(
-        0.055*front, 0.019*left, 0)
+    shoulder_to_hip_zero_v = torch.tensor([-0.055*front, -0.019*left, 0])
+    shoulder_to_hip_zero_ht = translation_ht(shoulder_to_hip_zero_v)
+
     # [0, 0.049, -0.2085]
-    shoulder_to_knee_zero = translation_ht(
-        0, 0.049*left, -0.2085)
+    knee_to_shoulder_zero_v = torch.tensor([0, -0.049*left, 0.2085])
+    knee_to_shoulder_zero_ht = translation_ht(knee_to_shoulder_zero_v)
+
     # [0, 0, -0.194]
-    knee_to_foot_zero = translation_ht(0, 0, -0.194)
+    foot_to_knee_zero_v = torch.tensor([0, 0, 0.194])
+    foot_to_knee_zero_ht = translation_ht(foot_to_knee_zero_v)
 
-    foot_to_knee_zero = invert_ht(knee_to_foot_zero)
-    foot_to_shoulder_zero = foot_to_knee_zero @ invert_ht(
-        shoulder_to_knee_zero)
-    foot_to_hip_zero = foot_to_shoulder_zero @ invert_ht(hip_to_shoulder_zero)
-    foot_to_torso_zero = foot_to_hip_zero @ invert_ht(torso_to_hip_zero)
+    foot_to_shoulder_zero_ht = foot_to_knee_zero_ht @ knee_to_shoulder_zero_ht
+    foot_to_hip_zero_ht = foot_to_shoulder_zero_ht @ shoulder_to_hip_zero_ht
+    foot_to_torso_zero_ht = foot_to_hip_zero_ht @ hip_to_torso_zero_ht
 
-    torso_to_foot_zero = invert_ht(foot_to_torso_zero)
+    torso_to_foot_zero_ht = invert_ht(foot_to_torso_zero_ht)
 
     # create rotation axes
     hip_ax = torch.tensor([front * 1., 0., 0.], device=device)
@@ -48,24 +50,24 @@ def build_jacobian_and_fk(q_vec, leg):
     knee_ax = torch.tensor([0., left * 1., 0.], device=device)
 
     # create the screw axes
-    hip_screw_b = screw_axis(hip_ax, foot_to_hip_zero[:3, 3])
-    shoulder_screw_b = screw_axis(shoulder_ax, foot_to_shoulder_zero[:3, 3])
-    knee_screw_b = screw_axis(knee_ax, foot_to_knee_zero[:3, 3])
+    hip_screw_b = screw_axis(hip_ax, foot_to_hip_zero_ht[:3, 3])
+    shoulder_screw_b = screw_axis(shoulder_ax, foot_to_shoulder_zero_ht[:3, 3])
+    knee_screw_b = screw_axis(knee_ax, foot_to_knee_zero_ht[:3, 3])
 
     hip_screwmat_b = screwvec_to_mat(hip_screw_b)
     shoulder_screwmat_b = screwvec_to_mat(shoulder_screw_b)
     knee_screwmat_b = screwvec_to_mat(knee_screw_b)
 
-    hip_ht_b = screwmat_to_ht(hip_screwmat_b, hip_angles)
-    shoulder_ht_b = screwmat_to_ht(shoulder_screwmat_b, shoulder_angles)
-    knee_ht_b = screwmat_to_ht(knee_screwmat_b, knee_angles)
+    hip_ht_b = screwmat_to_ht_batch(hip_screwmat_b, hip_angles)
+    shoulder_ht_b = screwmat_to_ht_batch(shoulder_screwmat_b, shoulder_angles)
+    knee_ht_b = screwmat_to_ht_batch(knee_screwmat_b, knee_angles)
 
-    foot_pos = torso_to_foot_zero @ hip_ht_b @ shoulder_ht_b @ knee_ht_b
+    foot_pos = torso_to_foot_zero_ht @ hip_ht_b @ shoulder_ht_b @ knee_ht_b
 
-    minus_hip_ht_b = screw_to_ht(-hip_screw_b, hip_angles)
-    minus_shoulder_ht_b = screw_to_ht(-shoulder_screw_b, shoulder_angles)
-    minus_knee_ht_b = screw_to_ht(-knee_screw_b, knee_angles)
-    minus_foot_ht_b = screwmat_to_ht(-torch.eye(4, device=device),
+    minus_hip_ht_b = screwvec_to_ht_batch(-hip_screw_b, hip_angles)
+    minus_shoulder_ht_b = screwvec_to_ht_batch(-shoulder_screw_b, shoulder_angles)
+    minus_knee_ht_b = screwvec_to_ht_batch(-knee_screw_b, knee_angles)
+    minus_foot_ht_b = screwmat_to_ht_batch(-torch.eye(4, device=device),
                                      torch.zeros(NUM_ENVS, device=device))
 
     j_knee_b = knee_screw_b.expand(NUM_ENVS, 6)
@@ -152,45 +154,3 @@ def mini_cheetah_dls_invkin(q_vec, goals):
 
 def mini_cheetah_pinv_invkin(q_vec, goals):
     return use_ik(q_vec, goals, pinv_invkin)
-
-
-def inv_kin_torch(q_vec, goals):
-    # get positions and jacobians
-    j0, f0 = build_jacobian_and_fk(q_vec, 0)
-    j1, f1 = build_jacobian_and_fk(q_vec, 1)
-    j2, f2 = build_jacobian_and_fk(q_vec, 2)
-    j3, f3 = build_jacobian_and_fk(q_vec, 3)
-
-    # calculate position deltas
-    d0 = goals[:, :3] - f0
-    d1 = goals[:, 3:6] - f1
-    d2 = goals[:, 6:9] - f2
-    d3 = goals[:, 9:12] - f3
-
-    # mag_sq_d0 = torch.sum(torch.pow(d0, 2), dim = -1)
-    # mag_sq_d1 = torch.sum(torch.pow(d1, 2), dim = -1)
-    # mag_sq_d2 = torch.sum(torch.pow(d2, 2), dim = -1)
-    # mag_sq_d3 = torch.sum(torch.pow(d3, 2), dim = -1)
-
-    print(
-        f"mag_d: {torch.norm(d0)}, {torch.norm(d1)}, {torch.norm(d2)}, {torch.norm(d3)}")
-
-    # print("Pinv: ", torch.pinverse(j0[0]))
-
-    # build joint deltas
-    jd0 = torch.concat(
-        [torch.pinverse(j0_i) @ d0_i for j0_i, d0_i in zip(j0, d0)], dim=-1).view(-1, 3)  # * mag_sq_d0
-    jd1 = torch.concat(
-        [torch.pinverse(j1_i) @ d1_i for j1_i, d1_i in zip(j1, d1)], dim=-1).view(-1, 3)  # * mag_sq_d1
-    jd2 = torch.concat(
-        [torch.pinverse(j2_i) @ d2_i for j2_i, d2_i in zip(j2, d2)], dim=-1).view(-1, 3)  # * mag_sq_d2
-    jd3 = torch.concat(
-        [torch.pinverse(j3_i) @ d3_i for j3_i, d3_i in zip(j3, d3)], dim=-1).view(-1, 3)  # * mag_sq_d3
-
-    # get new joint positions given the new joint deltas
-    # q_delta = torch.clamp(torch.concat([jd0, jd1, jd2, jd3], dim=1), -0.1, 0.1)
-    q_delta = torch.concat([jd0, jd1, jd2, jd3], dim=1)
-    # print(f"goals: {goals}")
-    # print(f"q_delta: {q_delta}")
-    # print(q_delta)
-    return q_vec + q_delta/2
