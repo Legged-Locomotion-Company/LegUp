@@ -217,6 +217,7 @@ class IsaacGymEnvironment:
             actions (torch.Tensor, optional): target joint positions to command each robot, shape `(num_environments, num_degrees_of_freedom)`. 
                 If none, robots are commanded to the default joint position provided earlier Defaults to None.
         """
+
         if actions is not None:
             self.gym.set_dof_position_target_tensor(self.sim, gymtorch.unwrap_tensor(actions))
         else:

@@ -93,7 +93,7 @@ BATCH_SIZE = 32768
 # total number of timesteps where each collection is one timestep
 TOTAL_TIMESTEPS = PARALLEL_ENVS * N_STEPS * 10000
 
-ENTROPY_COEF = 0.1
+ENTROPY_COEF = 0.05
 
 VALUE_COEF = 0.5
 
@@ -127,7 +127,7 @@ def train_ppo():
     env = GPUVecEnv(PARALLEL_ENVS, f"{os.getcwd()}/robots/mini_cheetah/physical_models", "mini-cheetah.urdf")    
     cb = CustomCallback(env)
 
-    model = PPO('MlpPolicy', env, tensorboard_log = './concurrent_training_tb', verbose = 2, policy_kwargs = {'net_arch': [512, 256, 64]}, 
+    model = PPO('MlpPolicy', env, tensorboard_log = './concurrent_training_tb', verbose = 0, policy_kwargs = {'net_arch': [512, 256, 64]}, 
                 batch_size = BATCH_SIZE, n_steps = N_STEPS, n_epochs = N_EPOCHS, ent_coef = ENTROPY_COEF, learning_rate = LEARNING_RATE, clip_range = CLIP_RANGE, gae_lambda = GAE_LAMBDA, gamma = DISCOUNT, vf_coef = VALUE_COEF)
 
     model.learn(total_timesteps = TOTAL_TIMESTEPS, callback = cb)
