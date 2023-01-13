@@ -67,8 +67,10 @@ class CustomCallback(BaseCallback):
         """
         This event is triggered before updating the policy.
         """
-        #print("POLICY UPDATE (ROLLOUT END)")
-        pass
+        
+        infos = self.locals['infos'][0]
+        for idx, name in enumerate(infos['names']):
+            self.logger.record(f"rewards/{name}", infos['terms'][idx].item())
 
     def _on_training_end(self) -> None:
         """
@@ -77,27 +79,29 @@ class CustomCallback(BaseCallback):
         pass
 
 # number of parallel environments to run
-PARALLEL_ENVS = 8192 #32
+PARALLEL_ENVS = 4096
 
 # number of experiences to collect per parallel environment
-N_STEPS = 250 # 256
+N_STEPS = 128
 
 # number of time we go through the entire rollout
-N_EPOCHS = 2 # 5
+N_EPOCHS = 5
 
 # minibatch size
-BATCH_SIZE = 10240
+BATCH_SIZE = 32768
 
 # total number of timesteps where each collection is one timestep
 TOTAL_TIMESTEPS = PARALLEL_ENVS * N_STEPS * 10000
 
-ENTROPY_COEF = 0.005
+ENTROPY_COEF = 0.01
 
-LEARNING_RATE = 5e-4
+VALUE_COEF = 0.5
+
+LEARNING_RATE = 3e-4
 
 GAE_LAMBDA = 0.95
 
-DISCOUNT = 0.996
+DISCOUNT = 0.99
 
 CLIP_RANGE = 0.2
 
@@ -123,8 +127,8 @@ def train_ppo():
     env = GPUVecEnv(PARALLEL_ENVS, f"{os.getcwd()}/robots/mini_cheetah/physical_models", "mini-cheetah.urdf")    
     cb = CustomCallback(env)
 
-    model = PPO('MlpPolicy', env, tensorboard_log = './concurrent_training_tb', verbose = 2, policy_kwargs = {'net_arch': [512, 256, 64]}, 
-                batch_size = BATCH_SIZE, n_steps = N_STEPS, n_epochs = N_EPOCHS, ent_coef = ENTROPY_COEF, learning_rate = LEARNING_RATE, clip_range = CLIP_RANGE, gae_lambda = GAE_LAMBDA, gamma = DISCOUNT)
+    model = PPO('MlpPolicy', env, tensorboard_log = './concurrent_training_tb', verbose = 0, policy_kwargs = {'net_arch': [512, 256, 64]}, 
+                batch_size = BATCH_SIZE, n_steps = N_STEPS, n_epochs = N_EPOCHS, ent_coef = ENTROPY_COEF, learning_rate = LEARNING_RATE, clip_range = CLIP_RANGE, gae_lambda = GAE_LAMBDA, gamma = DISCOUNT, vf_coef = VALUE_COEF)
 
     model.learn(total_timesteps = TOTAL_TIMESTEPS, callback = cb)
     model.save('ConcurrentTrainingEnv')

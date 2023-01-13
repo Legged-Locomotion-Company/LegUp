@@ -50,6 +50,7 @@ class IsaacGymEnvironment:
         camera_props = gymapi.CameraProperties()
         camera_props.width = width
         camera_props.height = height
+        # camera_props.use_collision_geometry = True
         self.camera_handle = self.gym.create_camera_sensor(self.env_actor_handles[0][0], camera_props)
 
         camera_offset = gymapi.Vec3(-0.5, -0.5, 1)
@@ -216,6 +217,7 @@ class IsaacGymEnvironment:
             actions (torch.Tensor, optional): target joint positions to command each robot, shape `(num_environments, num_degrees_of_freedom)`. 
                 If none, robots are commanded to the default joint position provided earlier Defaults to None.
         """
+
         if actions is not None:
             self.gym.set_dof_position_target_tensor(self.sim, gymtorch.unwrap_tensor(actions))
         else:
@@ -226,8 +228,6 @@ class IsaacGymEnvironment:
         self.gym.fetch_results(self.sim, True)
         self.gym.step_graphics(self.sim)
         self.gym.render_all_camera_sensors(self.sim)
-
-        self._refresh()
     
     def render(self) -> torch.Tensor:
         """Gets an image of the environment from the camera and returns it
@@ -238,7 +238,7 @@ class IsaacGymEnvironment:
         return self.gym.get_camera_image(self.sim, self.env_actor_handles[0][0], self.camera_handle, gymapi.IMAGE_COLOR).reshape(self.cam_height, self.cam_width, 4)
     
     def reset(self, env_index: List[int] = None):
-        """Resets the specified robot. Specifically, it will move it to a random position, give it zero velocity, and drop it from a height of 0.35 meters.
+        """Resets the specified robot. Specifically, it will move it to a random position, give it zero velocity, and drop it from a height of 0.28 meters.
 
         Args:
             env_index (list, torch.Tensor, optional): Indices of environments to reset. If none, all environments are reset. Defaults to None.
@@ -249,7 +249,7 @@ class IsaacGymEnvironment:
             env_index = self.all_env_index[env_index]
 
         random_pos = torch.rand(len(env_index), 3) * 2
-        random_pos[:, 2] = 0.35
+        random_pos[:, 2] = 0.28
 
         # TODO: make faster for cuda?
         random_rot = torch.zeros(len(env_index), 3)
