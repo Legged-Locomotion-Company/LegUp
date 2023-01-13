@@ -259,10 +259,8 @@ class ConcurrentTrainingEnv(VecEnv):
 
         obs_list = [root_quat, root_ang_vel, joint_pos, joint_vel, des_jpos_t1, des_jpos_t2, Q_err_hist, Q_vel_hist, relative_feet_pos, command, root_lin_vel, foot_height, contact_probs]
         obs = torch.cat(obs_list, dim = 1) # (num_envs, 153)
-
-        cause_nan = torch.unique(torch.argwhere(torch.isnan(obs)))
     
-        return obs, reward, terms, names, cause_nan
+        return obs, reward, terms, names
 
     def check_termination(self) -> Tuple[torch.Tensor, torch.Tensor]:
         """Checks if any environments have terminated (because of collisions) or truncated (ran out of time)
@@ -305,7 +303,7 @@ class ConcurrentTrainingEnv(VecEnv):
         
         self.env.reset(env_idx)
 
-        obs, rew, terms, names, cause_nan = self.make_observation_and_reward(None)
+        obs, rew, terms, names = self.make_observation_and_reward(None)
         return obs[env_idx]
 
     def reset(self) -> torch.Tensor:
@@ -327,16 +325,16 @@ class ConcurrentTrainingEnv(VecEnv):
             environments have terminated/truncated, and additional metadata (currently empty). Observation tensor has shape `(num_envs, observation_space)`
             and all other tensors have shape `(num_envs)`
         """
+
+        
         self.prev_joint_pos[:] = self.env.get_joint_position()
 
+        actions = torch.clamp(actions, -1, 1)
         actions = actions * G.action_scale + self.default_dof_pos
         self.env.step(actions)
         self.update_feet_states()
 
-        new_obs, reward, terms, names, cause_nan = self.make_observation_and_reward(actions)
-
-        if len(cause_nan) > 0:
-            print(f'Handled NaN at index {cause_nan}')
+        new_obs, reward, terms, names = self.make_observation_and_reward(actions)
 
         new_joint_pos = self.env.get_joint_position()
         joint_vel = (new_joint_pos - self.prev_joint_pos) / self.dt
@@ -354,10 +352,6 @@ class ConcurrentTrainingEnv(VecEnv):
         for term_idx in torch.where(term)[0]:
             reward[term_idx] = -10
             reset_idx.add(term_idx.item())
-        
-        for term_idx in cause_nan:
-            #reward[term_idx] = -10
-            reset_idx.add(term_idx.item())
 
         reset_idx = list(reset_idx)
 
@@ -367,10 +361,6 @@ class ConcurrentTrainingEnv(VecEnv):
         infos = [{} for _ in range(self.num_envs)]
         infos[0]['terms'] = terms
         infos[0]['names'] = names
-
-        next_nan = torch.unique(torch.argwhere(torch.isnan(new_obs)))
-        if len(next_nan) > 0:
-            print(next_nan)
 
         return new_obs, reward, torch.logical_or(term, trunc), infos       
 
