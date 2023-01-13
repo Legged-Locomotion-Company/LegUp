@@ -79,7 +79,7 @@ class CustomCallback(BaseCallback):
         pass
 
 # number of parallel environments to run
-PARALLEL_ENVS = 8192
+PARALLEL_ENVS = 4096
 
 # number of experiences to collect per parallel environment
 N_STEPS = 128
@@ -93,7 +93,7 @@ BATCH_SIZE = 32768
 # total number of timesteps where each collection is one timestep
 TOTAL_TIMESTEPS = PARALLEL_ENVS * N_STEPS * 10000
 
-ENTROPY_COEF = 0.05
+ENTROPY_COEF = 0.01
 
 VALUE_COEF = 0.5
 
