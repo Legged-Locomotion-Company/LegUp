@@ -228,8 +228,6 @@ class IsaacGymEnvironment:
         self.gym.fetch_results(self.sim, True)
         self.gym.step_graphics(self.sim)
         self.gym.render_all_camera_sensors(self.sim)
-
-        self._refresh()
     
     def render(self) -> torch.Tensor:
         """Gets an image of the environment from the camera and returns it

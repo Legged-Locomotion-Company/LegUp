@@ -80,7 +80,7 @@ class HistoryBuffer:
 
 class G:
     """Random constants used in the paper"""
-    action_scale = 0.1
+    action_scale = 0.5
     des_foot_height = 0.09
 
     k_v = 3.0
@@ -136,12 +136,22 @@ class ConcurrentTrainingEnv(VecEnv):
         self.joint_pos_err_hist = HistoryBuffer(num_environments, self.dt, 0.02, 3, 12, self.device)
         self.joint_vel_hist = HistoryBuffer(num_environments, self.dt, 0.02, 3, 12, self.device)
 
+        self.prev_obs = HistoryBuffer(num_environments, self.dt, self.dt, 5, 153, self.device)
+
         # OpenAI Gym Environment required fields
         self.observation_space = gym.spaces.Box(low = np.ones(153) * -10000000, high = np.ones(153) * 10000000, dtype = np.float32)
         self.action_space = gym.spaces.Box(low = np.ones(12) * -10000000, high = np.ones(12) * 10000000, dtype = np.float32)
         self.metadata = {"render_modes": ['rgb_array']}
         self.reward_range = (-float("inf"), float("inf"))
         self.spec = None
+
+        self.thresh = torch.zeros(12).to(self.device)
+        self.thresh[[0, 3, 6, 9]] = torch.pi / 3 # abduct
+        self.thresh[[1, 4, 7, 10]] = torch.pi / 3 # thigh
+        self.thresh[[2, 5, 8, 11]] = 2 * torch.pi / 3 # knee
+
+        # self.lower = (-self.thresh - self.default_dof_pos) / G.action_scale
+        # self.upper = (self.thresh - self.default_dof_pos) / G.action_scale
 
     def sq_norm(self, tensor: torch.Tensor, dim: int = -1):
         """Helper function to compute norm(x)^2 without actually doing norm, thus avoiding the sqrt
@@ -224,6 +234,40 @@ class ConcurrentTrainingEnv(VecEnv):
 
         return r_tot, terms, names
 
+    def explain_obs(self, idx, obs):
+        root_quat = obs[idx, 0:4]
+        root_ang_vel = obs[idx, 4:7]
+        joint_pos = obs[idx, 7:19]
+        joint_vel = obs[idx, 19:31]
+        des_jpos_t1 = obs[idx, 31:43]
+        des_jpos_t2 = obs[idx, 43:55]
+        Q_err_hist = obs[idx, 55:91]
+        Q_vel_hist = obs[idx, 91:127]
+        rel_feet_pos = obs[idx, 127:139]
+        cmd = obs[idx, 139:142]
+        root_lin_vel = obs[idx, 142:145]
+        feet_height = obs[idx, 145:149]
+        contact_probs = obs[idx, 149:153]
+
+        print(f'NaN found at {idx}, timestep {self.ep_lens[idx]}')
+        # print(f'root_quat: {root_quat}')
+        # print(f'root_ang_vel: {root_ang_vel}')
+        print(f'joint_pos: {joint_pos}')
+        # print(f'joint_vel: {joint_vel}')
+        print(f'des_jpos_t1: {des_jpos_t1}')
+        print(f'des_jpos_t2: {des_jpos_t2}')
+        # print(f'Q_err_hist: {Q_err_hist}')
+        # print(f'Q_vel_hist: {Q_vel_hist}')
+        print(f'rel_feet_pos: {rel_feet_pos}')
+        print(f'root_lin_vel: {root_lin_vel}')
+        print(f'real contact states: {self.env.get_contact_states()[idx]}')
+        # print(f'cmd: {cmd}')
+        # print(f'feet_height: {feet_height}')
+        # print(f'contact_probs: {contact_probs}')
+        print()
+
+
+
     def make_observation_and_reward(self, actions: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """Makes observation from simulation environment and computes the reward from the observations and action
 
@@ -259,6 +303,16 @@ class ConcurrentTrainingEnv(VecEnv):
 
         obs_list = [root_quat, root_ang_vel, joint_pos, joint_vel, des_jpos_t1, des_jpos_t2, Q_err_hist, Q_vel_hist, relative_feet_pos, command, root_lin_vel, foot_height, contact_probs]
         obs = torch.cat(obs_list, dim = 1) # (num_envs, 153)
+
+        if torch.any(torch.isnan(obs)):
+            where_nan = torch.unique(torch.argwhere(torch.isnan(obs))[:, 0])
+
+            for i in range(5):
+                print(f'Prev obs {i}')
+                self.explain_obs(where_nan, self.prev_obs.get(i))
+
+            print(f'Current obs:')
+            self.explain_obs(where_nan, obs)
     
         return obs, reward, terms, names
 
@@ -300,6 +354,7 @@ class ConcurrentTrainingEnv(VecEnv):
         self.des_joint_pos_hist.reset(env_idx)
         self.joint_pos_err_hist.reset(env_idx)
         self.joint_vel_hist.reset(env_idx)
+        self.prev_obs.reset(env_idx)
         
         self.env.reset(env_idx)
 
@@ -326,12 +381,16 @@ class ConcurrentTrainingEnv(VecEnv):
             and all other tensors have shape `(num_envs)`
         """
 
-        
         self.prev_joint_pos[:] = self.env.get_joint_position()
 
-        actions = torch.clamp(actions, -1, 1)
+        # actions < (thresh - self.default_dof_pos) / G.action_scale
+        # actions > (-thresh - self.default_dof_pos) / G.action_scale
+
         actions = actions * G.action_scale + self.default_dof_pos
+        actions = torch.clamp(actions, min = -self.thresh, max = self.thresh)
         self.env.step(actions)
+
+        self.env._refresh()
         self.update_feet_states()
 
         new_obs, reward, terms, names = self.make_observation_and_reward(actions)
@@ -357,6 +416,8 @@ class ConcurrentTrainingEnv(VecEnv):
 
         if len(reset_idx) > 0:
             new_obs[reset_idx, :] = self.reset_partial(reset_idx)
+
+        self.prev_obs.step(new_obs)
 
         infos = [{} for _ in range(self.num_envs)]
         infos[0]['terms'] = terms
