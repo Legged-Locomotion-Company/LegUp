@@ -23,6 +23,7 @@ class Robot:
             To be set in a subclass.
             Contains the indices for the links which immediately precede the knee links
     """
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     # This should be a (NDOF) dimension tensor with joint positions for the robot at its home position
     home_position: torch.Tensor
@@ -35,6 +36,7 @@ class Robot:
 
     # This one should be a tensor which contains the indices of all of links which immediately precede the knee links
     thigh_indices: List[int]
+    
 
     def foot_positions(q: torch.Tensor) -> torch.Tensor:
         """Calculates the foot position for the robot
