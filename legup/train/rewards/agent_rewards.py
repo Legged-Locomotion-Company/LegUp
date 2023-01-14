@@ -23,7 +23,7 @@ class WildAnymalReward:
         self.dt = dt
         self.knee_threshold = train_config['knee_threshold']
 
-    def __call__(self, previous_joint_velocities, joint_target_t_1, joint_target_t_2, curriculum_factor: float = 1.0) -> torch.Tensor:
+    def __call__(self, previous_joint_velocities: torch.Tensor, joint_target_t_1: torch.Tensor, joint_target_t_2: torch.Tensor, curriculum_factor: float = 1.0) -> torch.Tensor:
         """Compute reward.
 
         Args:

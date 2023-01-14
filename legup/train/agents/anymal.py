@@ -6,6 +6,9 @@ from typing import List
 
 
 class AnymalAgent(BaseAgent):
+    """Specific agent implementation for https://leggedrobotics.github.io/rl-perceptiveloco/assets/pdf/wild_anymal.pdf
+    """
+
     def __init__(self, robot_cfg, num_environments, asset_path, asset_name, train_cfg):
         super().__init__(robot_cfg, num_environments, asset_path, asset_name)
 
@@ -39,6 +42,8 @@ class AnymalAgent(BaseAgent):
         extro = torch.zeros(self.num_envs, 208).to(self.device)
         privil = torch.zeros(self.num_envs, 50).to(self.device)
 
+        # TODO: talk to rohan about the command
+
         proprio[idx, :3] = self.command[idx]
 
         proprio[idx, 3:6] = self.env.get_position()[idx]
@@ -52,7 +57,9 @@ class AnymalAgent(BaseAgent):
         proprio[idx, 72:96] = self.joint_vel_history[idx].flatten(start_dim=1)
         proprio[idx, 96:120] = self.joint_target_history[idx].flatten(
             start_dim=1)
-        proprio[:, 120:133] = self.phase_gen(idx)
+
+        # TODO: talk to misha about getting the CPG phase generation
+        # proprio[:, 120:133] = self.phase_gen(idx)
 
         privil[idx, :4] = self.env.get_contact_states(
         )[idx][:, [3, 6, 9, 12]].to(torch.float)
@@ -99,6 +106,6 @@ class AnymalAgent(BaseAgent):
 
         # Check if the robot's movements exceed the torque limits
         is_exceeding_torque = torch.any(
-            torch.abs(self.env.get_joint_torques()) > self.train_cfg.max_torque)
+            torch.abs(self.env.get_joint_torques()) > self.train_cfg.max_torque, dim=-1)
 
         return (is_collided + is_tilted + is_exceeding_torque).bool()
