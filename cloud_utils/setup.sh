@@ -9,7 +9,10 @@ AndrewMead10;
 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;
 cd rl-loco;
 pip install -e .;
-sudo apt-get install libpython3.7;
-Y;
+sudo apt-get install libpython3.7 libpython3.7;
+pip install opencv-python;
+apt update && apt install -y libsm6 libxext6;
+apt-get install -y libxrender-dev;
+sudo apt install build-essential;
 
 
