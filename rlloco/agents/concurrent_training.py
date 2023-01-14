@@ -197,13 +197,19 @@ class ConcurrentTrainingEnv(VecEnv):
         sqrt_vel = torch.sqrt(torch.linalg.norm(feet_vel, dim = -1))
         r_cl = G.k_cl * torch.pow(foot_height - G.des_foot_height, 2) * sqrt_vel
 
+        # just wrote this, im not really sure if it works
         # yaw = tgm.quaternion_to_angle_axis(root_quat)[:, 2]
         # yaw_diff = torch.where(yaw > torch.pi, 2 * torch.pi - yaw, yaw)
-        # r_ori = G.k_ori * torch.pow(yaw_diff, 2) # maybe wrong, not sure what it should be
+        # r_ori = G.k_ori * torch.pow(yaw_diff, 2)
         
         # taken from NVIDIA-Omniverse example
-        ori = quat_rotate_inverse(root_quat, self.gravity_vec)
-        r_ori = G.k_ori * self.sq_norm(ori[:, :2])
+        # ori = quat_rotate_inverse(root_quat, self.gravity_vec)
+        # r_ori = G.k_ori * self.sq_norm(ori[:, :2])
+
+        # not really sure if this works either :(
+        angle = tgm.quaternion_to_angle_axis(root_quat)
+        rot_error = np.pi - angle[:, 2]
+        r_ori = G.k_ori * torch.abs(rot_error)
 
         r_t = G.k_t * self.sq_norm(self.env.get_joint_torque())
 
@@ -220,10 +226,11 @@ class ConcurrentTrainingEnv(VecEnv):
         r_base = G.k_base * (0.8 * torch.pow(root_lin_vel[:, 2], 2) + 0.2 * torch.abs(root_ang_vel[:, 0]) + 0.2 * torch.abs(root_ang_vel[:, 1]))
 
         # zeroing out some rewards I think aren't working properly
-        r_w[:] = 0
-        r_slip[:] = 0
-        r_s1[:] = 0
-        r_s2[:] = 0
+        # r_w[:] = 0
+        # r_slip[:] = 0
+        # r_s1[:] = 0
+        # r_s2[:] = 0
+        # r_q_dd[:] = 0
     
         r_pos = r_v + r_w + torch.sum(r_air, dim = -1) # in the paper, they only sum 3 feet instead of 4?
         r_neg = r_ori + r_t + r_q + r_q_d + r_q_dd + r_s1 + r_s2 + r_base + torch.sum(r_slip + r_cl, dim = -1) # in the paper, they only sum 3 feet instead of 4?

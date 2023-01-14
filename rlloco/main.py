@@ -71,6 +71,8 @@ class CustomCallback(BaseCallback):
         infos = self.locals['infos'][0]
         for idx, name in enumerate(infos['names']):
             self.logger.record(f"rewards/{name}", infos['terms'][idx].item())
+        
+        self.model.save(os.path.join('saved_models', str(self.num_timesteps)))
 
     def _on_training_end(self) -> None:
         """
@@ -82,7 +84,7 @@ class CustomCallback(BaseCallback):
 PARALLEL_ENVS = 4096
 
 # number of experiences to collect per parallel environment
-N_STEPS = 128
+N_STEPS = 256
 
 # number of time we go through the entire rollout
 N_EPOCHS = 5
@@ -135,14 +137,17 @@ def train_ppo():
 
 # Runs the agent based on a saved model
 def eval_ppo():
-    env = GPUVecEnv(PARALLEL_ENVS, f"{os.getcwd()}/robots/mini_cheetah/physical_models", "mini-cheetah.urdf")
-    model = PPO.load('ConcurrentTrainingEnv')
+    env = GPUVecEnv(1, f"{os.getcwd()}/robots/mini_cheetah/physical_models", "mini-cheetah.urdf")    
+    model = PPO.load('saved_models/503316480.zip')
 
     obs = env.reset()
     for _ in range(100000):
         action, _states = model.predict(obs)
         obs, rewards, dones, info = env.step(action)
-        env.render()
+        cv2.imshow('training', env.render())
+        cv2.waitKey(1)
+        
 
 if __name__ == '__main__':
     train_ppo()
+    # eval_ppo()
