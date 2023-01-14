@@ -6,7 +6,8 @@ import torch
 import numpy as np
 import pytorch3d.transforms.rotation_conversions as R
 
-from rlloco.isaac.simulator import SimulatorContext
+from legup.isaac.simulator import SimulatorContext
+
 
 class IsaacGymEnvironment:
     """Interfaces with IsaacGym to handle all of the simulation, and provides an API to get simulation properties and move the robot.
@@ -22,15 +23,16 @@ class IsaacGymEnvironment:
             asset_path (str): path to URDF file from `asset_root`
             default_dof_pos (torch.Tensor): Joint positions to set for all robots when they are initialized or reset
         """
-        self.ctx = SimulatorContext(num_environments, use_cuda, asset_root, asset_path)
+        self.ctx = SimulatorContext(
+            num_environments, use_cuda, asset_root, asset_path)
         self.num_environments = num_environments
         self.gym = self.ctx.gym
         self.sim = self.ctx.sim
         self.env_actor_handles = self.ctx.env_actor_handles
         self.device = torch.device("cuda" if use_cuda else "cpu")
 
-        self.all_env_index = torch.Tensor(range(num_environments)).to(torch.int).to(self.device)
-        
+        self.all_env_index = torch.Tensor(
+            range(num_environments)).to(torch.int).to(self.device)
 
         # TODO: parameterize this
         self.default_dof_pos = default_dof_pos
@@ -42,7 +44,7 @@ class IsaacGymEnvironment:
         self.refresh_buffers()
 
         self._init_camera(640, 480)
-    
+
     def _init_camera(self, width: int, height):
         """Creates a camera object in the simulator so that it can be visualized in headless mode
 
@@ -54,13 +56,18 @@ class IsaacGymEnvironment:
         camera_props.width = width
         camera_props.height = height
         # camera_props.use_collision_geometry = True
-        self.camera_handle = self.gym.create_camera_sensor(self.env_actor_handles[0][0], camera_props)
+        self.camera_handle = self.gym.create_camera_sensor(
+            self.env_actor_handles[0][0], camera_props)
 
         camera_offset = gymapi.Vec3(-0.5, -0.5, 1)
-        camera_rotation = gymapi.Quat().from_euler_zyx(np.radians(0), np.radians(45), np.radians(45))
-        body_handle = self.gym.get_actor_rigid_body_handle(self.env_actor_handles[0][0], self.env_actor_handles[0][1], 0)
-        self.gym.attach_camera_to_body(self.camera_handle, self.env_actor_handles[0][0], body_handle, gymapi.Transform(camera_offset, camera_rotation), gymapi.FOLLOW_POSITION)
-        self.gym.set_light_parameters(self.sim, 0, gymapi.Vec3(0.8, 0.8, 0.8), gymapi.Vec3(0.8, 0.8, 0.8), gymapi.Vec3(0, 0, 0))
+        camera_rotation = gymapi.Quat().from_euler_zyx(
+            np.radians(0), np.radians(45), np.radians(45))
+        body_handle = self.gym.get_actor_rigid_body_handle(
+            self.env_actor_handles[0][0], self.env_actor_handles[0][1], 0)
+        self.gym.attach_camera_to_body(self.camera_handle, self.env_actor_handles[0][0], body_handle, gymapi.Transform(
+            camera_offset, camera_rotation), gymapi.FOLLOW_POSITION)
+        self.gym.set_light_parameters(self.sim, 0, gymapi.Vec3(
+            0.8, 0.8, 0.8), gymapi.Vec3(0.8, 0.8, 0.8), gymapi.Vec3(0, 0, 0))
 
         self.cam_width = width
         self.cam_height = height
@@ -69,27 +76,35 @@ class IsaacGymEnvironment:
         """Acquires the tensors that contain all of the robot's physical properties (dynamics), and creates
         several views to make reading/writing easier
         """
-        _root_states = self.gym.acquire_actor_root_state_tensor(self.sim)  # (num_actors, (pos + rot + linvel + angvel) = 13)
-        self.root_states = gymtorch.wrap_tensor(_root_states).view(self.num_environments, 13)
+        _root_states = self.gym.acquire_actor_root_state_tensor(
+            self.sim)  # (num_actors, (pos + rot + linvel + angvel) = 13)
+        self.root_states = gymtorch.wrap_tensor(
+            _root_states).view(self.num_environments, 13)
         self.root_position = self.root_states[:, :3]
         self.root_rotation = self.root_states[:, 3:7]
         self.root_lin_vel = self.root_states[:, 7:10]
         self.root_ang_vel = self.root_states[:, 10:]
 
         _dof_states = self.gym.acquire_dof_state_tensor(self.sim)
-        self.dof_states = gymtorch.wrap_tensor(_dof_states).view(self.num_environments, -1, 2)
+        self.dof_states = gymtorch.wrap_tensor(
+            _dof_states).view(self.num_environments, -1, 2)
         self.dof_pos = self.dof_states[:, :, 0]
         self.dof_vel = self.dof_states[:, :, 1]
         self.num_dof = self.dof_states.shape[1]
 
         _dof_forces = self.gym.acquire_dof_force_tensor(self.sim)
-        self.dof_forces = gymtorch.wrap_tensor(_dof_forces).view(self.num_environments, self.num_dof)
+        self.dof_forces = gymtorch.wrap_tensor(_dof_forces).view(
+            self.num_environments, self.num_dof)
 
-        _net_contact_forces = self.gym.acquire_net_contact_force_tensor(self.sim)  # (num_rb, 3)
-        self.net_contact_forces = gymtorch.wrap_tensor(_net_contact_forces).view(self.num_environments, -1, 3)
+        _net_contact_forces = self.gym.acquire_net_contact_force_tensor(
+            self.sim)  # (num_rb, 3)
+        self.net_contact_forces = gymtorch.wrap_tensor(
+            _net_contact_forces).view(self.num_environments, -1, 3)
 
-        _rb_states = self.gym.acquire_rigid_body_state_tensor(self.sim)  # (num_rb, (pos + rot + linvel + angvel) = 13)
-        self.rb_states = gymtorch.wrap_tensor(_rb_states).view(self.num_environments, -1, 13)
+        _rb_states = self.gym.acquire_rigid_body_state_tensor(
+            self.sim)  # (num_rb, (pos + rot + linvel + angvel) = 13)
+        self.rb_states = gymtorch.wrap_tensor(
+            _rb_states).view(self.num_environments, -1, 13)
         self.rb_pos = self.rb_states[:, :, :3]
         self.rb_rot = self.rb_states[:, :, 3:7]
         self.rb_lin_vel = self.rb_states[:, :, 7:10]
@@ -222,16 +237,17 @@ class IsaacGymEnvironment:
         """
 
         if actions is not None:
-            self.gym.set_dof_position_target_tensor(self.sim, gymtorch.unwrap_tensor(actions))
+            self.gym.set_dof_position_target_tensor(
+                self.sim, gymtorch.unwrap_tensor(actions))
         else:
-            self.gym.set_dof_position_target_tensor(self.sim, gymtorch.unwrap_tensor(self.command_dof_pos))
-
+            self.gym.set_dof_position_target_tensor(
+                self.sim, gymtorch.unwrap_tensor(self.command_dof_pos))
 
         self.gym.simulate(self.sim)
         self.gym.fetch_results(self.sim, True)
         self.gym.step_graphics(self.sim)
         self.gym.render_all_camera_sensors(self.sim)
-    
+
     def render(self) -> torch.Tensor:
         """Gets an image of the environment from the camera and returns it
 
@@ -239,7 +255,7 @@ class IsaacGymEnvironment:
             torch.Tensor: RGB image, shape `(camera_height, camera_width, 4)`
         """
         return self.gym.get_camera_image(self.sim, self.env_actor_handles[0][0], self.camera_handle, gymapi.IMAGE_COLOR).reshape(self.cam_height, self.cam_width, 4)
-    
+
     def reset(self, env_index: List[int] = None):
         """Resets the specified robot. Specifically, it will move it to a random position, give it zero velocity, and drop it from a height of 0.28 meters.
 
@@ -257,18 +273,21 @@ class IsaacGymEnvironment:
         # TODO: make faster for cuda?
         random_rot = torch.zeros(len(env_index), 3)
         random_rot[:, 0] = torch.deg2rad(torch.rand(len(env_index)) * 360)
-        random_rot[:, 1] = 0 
+        random_rot[:, 1] = 0
         random_rot[:, 2] = np.radians(180)
-        random_rot = R.matrix_to_quaternion(R.euler_angles_to_matrix(random_rot, convention = 'XYZ'))
-        
-        idx_tensor = env_index.long() # why can't I index with int32 tensors :(
+        random_rot = R.matrix_to_quaternion(
+            R.euler_angles_to_matrix(random_rot, convention='XYZ'))
+
+        idx_tensor = env_index.long()  # why can't I index with int32 tensors :(
         self.root_position[idx_tensor, :] = random_pos.to(self.device)
         self.root_lin_vel[idx_tensor, :] = 0
         self.root_ang_vel[idx_tensor, :] = 0
         self.root_rotation[idx_tensor, :] = random_rot.to(self.device)
         self.dof_pos[idx_tensor, :] = self.default_dof_pos
         self.dof_vel[idx_tensor, :] = 0
-        
+
         indices = gymtorch.unwrap_tensor(env_index)
-        self.gym.set_dof_state_tensor_indexed(self.sim,  gymtorch.unwrap_tensor(self.dof_states), indices, len(env_index))
-        self.gym.set_actor_root_state_tensor_indexed(self.sim,  gymtorch.unwrap_tensor(self.root_states), indices, len(env_index))
+        self.gym.set_dof_state_tensor_indexed(
+            self.sim,  gymtorch.unwrap_tensor(self.dof_states), indices, len(env_index))
+        self.gym.set_actor_root_state_tensor_indexed(
+            self.sim,  gymtorch.unwrap_tensor(self.root_states), indices, len(env_index))

@@ -1,5 +1,5 @@
 import torch
-from rlloco.agents.rewards.reward_helpers import squared_norm
+from legup.train.rewards.reward_helpers import squared_norm
 from typing import Union
 
 """

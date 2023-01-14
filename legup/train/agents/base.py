@@ -1,5 +1,5 @@
-from rlloco.isaac.environment import IsaacGymEnvironment
-from rlloco.robots.Robot import Robot
+from legup.isaac.environment import IsaacGymEnvironment
+from legup.robots.Robot import Robot
 
 from typing import Union, List, Tuple
 
@@ -34,16 +34,19 @@ class BaseAgent(VecEnv):
         self.num_envs = num_environments
         self.term_idx = self.all_envs.copy()
 
-        self.env = IsaacGymEnvironment(num_environments, True, asset_path, asset_name, self.default_dof_pos)
+        self.env = IsaacGymEnvironment(
+            num_environments, True, asset_path, asset_name, self.default_dof_pos)
         self.robot = robot
 
-        self.dt = 1. / 60. # TODO: make this config
-        self.max_ep_len = 1000 / self.dt # TODO: make this config
+        self.dt = 1. / 60.  # TODO: make this config
+        self.max_ep_len = 1000 / self.dt  # TODO: make this config
 
         # OpenAI Gym Environment required fields
         # TODO: custom observation space/action space bounds, this would help with clipping!
-        self.observation_space = gym.spaces.Box(low = np.ones(153) * -10000000, high = np.ones(153) * 10000000, dtype = np.float32)
-        self.action_space = gym.spaces.Box(low = np.ones(12) * -10000000, high = np.ones(12) * 10000000, dtype = np.float32)
+        self.observation_space = gym.spaces.Box(low=np.ones(
+            153) * -10000000, high=np.ones(153) * 10000000, dtype=np.float32)
+        self.action_space = gym.spaces.Box(low=np.ones(
+            12) * -10000000, high=np.ones(12) * 10000000, dtype=np.float32)
         self.metadata = {"render_modes": ['rgb_array']}
         self.reward_range = (-float("inf"), float("inf"))
         self.spec = None
@@ -58,7 +61,7 @@ class BaseAgent(VecEnv):
             torch.Tensor: joint position targets of shape `(num_envs, num_dof)`
         """
         return actions
-    
+
     def make_observation(self) -> torch.Tensor:
         """Computes a new observation from the environment
 
@@ -69,7 +72,7 @@ class BaseAgent(VecEnv):
             torch.Tensor: new observations of shape `(num_envs, observation_space)`
         """
         raise NotImplementedError("agent::make_observation not implemented!")
-    
+
     def make_reward(self, actions: torch.Tensor) -> torch.Tensor:
         """Computes a new reward based on the environment
 
@@ -88,7 +91,7 @@ class BaseAgent(VecEnv):
         """Called by agent after the environment is updated every step, used for tracking any agent-specific information. Nothing happens if not implemented
         """
         pass
-    
+
     def check_termination(self) -> List[int]:
         """Checks if any agents have satisfied your termination conditions. Must return a truthy tensor of shape `(num_envs)`
 
@@ -99,7 +102,7 @@ class BaseAgent(VecEnv):
             List[int]: truthy tensor of shape `(num_envs)` that explains which agents/environments have terminated
         """
         raise NotImplementedError("agent::check_termination not implemented!")
-    
+
     def reset_envs(self, idxs: Union[torch.Tensor, List[int], int]):
         """This is called right before any of the environments are reset, use it to reset any information you are tracking. Nothing happens if not implemented.
 
@@ -123,18 +126,18 @@ class BaseAgent(VecEnv):
         # reward[torch.where(term)] = -10
         # reset_idx = torch.logical_or(term, trunc)
         # return reset_idx.long().tolist()
-        
+
         # TODO: can probably make this faster
         reset_idx = set()
         for term_idx in torch.where(trunc)[0]:
             reset_idx.add(term_idx.item())
 
         for term_idx in torch.where(term)[0]:
-            reward[term_idx] = -10 # TODO: add a config for this
+            reward[term_idx] = -10  # TODO: add a config for this
             reset_idx.add(term_idx.item())
-        
+
         return list(reset_idx)
-    
+
     def reset_partial(self) -> List[int]:
         """Resets a subset of all environments, if they need to be reset
 
@@ -148,7 +151,7 @@ class BaseAgent(VecEnv):
             self.env.reset(self.term_idx)
             dones += self.term_idx
 
-        self.term_idx.clear()        
+        self.term_idx.clear()
         return dones
 
     def reset(self):
@@ -190,10 +193,10 @@ class BaseAgent(VecEnv):
         # update tracking info (episodes done, terminated environments)
         self.ep_lens += 1
         self.term_idx = self.get_termination_list(reward)
-        
+
         # TODO: add specific reward information
         infos = [{} for _ in range(self.num_envs)]
-        return new_obs, reward, dones, infos       
+        return new_obs, reward, dones, infos
 
     def render(self) -> torch.Tensor:
         """Gets a screenshot from simulation environment as torch tensor
@@ -203,7 +206,7 @@ class BaseAgent(VecEnv):
         """
         return self.env.render()
 
-    def env_is_wrapped(self, wrapper_class, indices = None):
+    def env_is_wrapped(self, wrapper_class, indices=None):
         """Added because it is required as per the OpenAI gym specification"""
         return [False]
 
@@ -219,7 +222,7 @@ class BaseAgent(VecEnv):
         """Added because it is required as per the OpenAI gym specification"""
         raise NotImplementedError
 
-    def seed(self, seed = None):
+    def seed(self, seed=None):
         """Added because it is required as per the OpenAI gym specification"""
         raise NotImplementedError
 

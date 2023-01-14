@@ -1,4 +1,4 @@
-from rlloco.agents.concurrent_training import ConcurrentTrainingEnv
+from legup.train.agents.concurrent_training import ConcurrentTrainingEnv
 
 import torch
 import os
@@ -7,12 +7,14 @@ from stable_baselines3.common.callbacks import BaseCallback
 
 import cv2
 
+
 class CustomCallback(BaseCallback):
     """
     A custom callback that derives from ``BaseCallback``.
 
     :param verbose: (int) Verbosity level 0: not output 1: info 2: debug
     """
+
     def __init__(self, env, verbose=0):
         super(CustomCallback, self).__init__(verbose)
         self.env_ = env
@@ -67,11 +69,11 @@ class CustomCallback(BaseCallback):
         """
         This event is triggered before updating the policy.
         """
-        
+
         infos = self.locals['infos'][0]
         for idx, name in enumerate(infos['names']):
             self.logger.record(f"rewards/{name}", infos['terms'][idx].item())
-        
+
         self.model.save(os.path.join('saved_models', str(self.num_timesteps)))
 
     def _on_training_end(self) -> None:
@@ -79,6 +81,7 @@ class CustomCallback(BaseCallback):
         This event is triggered before exiting the `learn()` method.
         """
         pass
+
 
 # number of parallel environments to run
 PARALLEL_ENVS = 4096
@@ -108,7 +111,10 @@ DISCOUNT = 0.99
 CLIP_RANGE = 0.2
 
 # Wrapper for ConcurrentTrainingEnv to convert returned torch tensors to numpy and input numpy arrays to torch tensors
-class GPUVecEnv(ConcurrentTrainingEnv): # TODO: generalize it to not just the `ConcurrentTrainingEnv` environment
+
+
+# TODO: generalize it to not just the `ConcurrentTrainingEnv` environment
+class GPUVecEnv(ConcurrentTrainingEnv):
     def step(self, actions):
         actions = torch.from_numpy(actions).cuda()
 
@@ -119,25 +125,31 @@ class GPUVecEnv(ConcurrentTrainingEnv): # TODO: generalize it to not just the `C
         dones = dones.cpu().detach().numpy()
 
         return new_obs, reward, dones, infos
-    
+
     def reset(self):
         obs = super().reset()
         return obs.cpu().detach().numpy()
 
 # Trains the agent using PPO from stable_baselines3. Tensorboard logging to './concurrent_training_tb' and saves model to ConcurrentTrainingEnv
+
+
 def train_ppo():
-    env = GPUVecEnv(PARALLEL_ENVS, f"{os.getcwd()}/robots/mini_cheetah/physical_models", "mini-cheetah.urdf")    
+    env = GPUVecEnv(
+        PARALLEL_ENVS, f"{os.getcwd()}/robots/mini_cheetah/physical_models", "mini-cheetah.urdf")
     cb = CustomCallback(env)
 
-    model = PPO('MlpPolicy', env, tensorboard_log = './concurrent_training_tb', verbose = 0, policy_kwargs = {'net_arch': [512, 256, 64]}, 
-                batch_size = BATCH_SIZE, n_steps = N_STEPS, n_epochs = N_EPOCHS, ent_coef = ENTROPY_COEF, learning_rate = LEARNING_RATE, clip_range = CLIP_RANGE, gae_lambda = GAE_LAMBDA, gamma = DISCOUNT, vf_coef = VALUE_COEF)
+    model = PPO('MlpPolicy', env, tensorboard_log='./concurrent_training_tb', verbose=0, policy_kwargs={'net_arch': [512, 256, 64]},
+                batch_size=BATCH_SIZE, n_steps=N_STEPS, n_epochs=N_EPOCHS, ent_coef=ENTROPY_COEF, learning_rate=LEARNING_RATE, clip_range=CLIP_RANGE, gae_lambda=GAE_LAMBDA, gamma=DISCOUNT, vf_coef=VALUE_COEF)
 
-    model.learn(total_timesteps = TOTAL_TIMESTEPS, callback = cb)
+    model.learn(total_timesteps=TOTAL_TIMESTEPS, callback=cb)
     model.save('ConcurrentTrainingEnv')
 
 # Runs the agent based on a saved model
+
+
 def eval_ppo():
-    env = GPUVecEnv(1, f"{os.getcwd()}/robots/mini_cheetah/physical_models", "mini-cheetah.urdf")    
+    env = GPUVecEnv(
+        1, f"{os.getcwd()}/robots/mini_cheetah/physical_models", "mini-cheetah.urdf")
     model = PPO.load('saved_models/503316480.zip')
 
     obs = env.reset()
@@ -146,7 +158,7 @@ def eval_ppo():
         obs, rewards, dones, info = env.step(action)
         cv2.imshow('training', env.render())
         cv2.waitKey(1)
-        
+
 
 if __name__ == '__main__':
     train_ppo()
