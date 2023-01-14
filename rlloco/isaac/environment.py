@@ -37,7 +37,10 @@ class IsaacGymEnvironment:
         self.command_dof_pos = self.default_dof_pos.repeat(num_environments, 1)
 
         self._acquire_state_tensors()
-        self._refresh()
+
+        # self.reset(self.all_env_index) # not sure if I can actually do this
+        self.refresh_buffers()
+
         self._init_camera(640, 480)
     
     def _init_camera(self, width: int, height):
@@ -93,7 +96,7 @@ class IsaacGymEnvironment:
         self.rb_ang_vel = self.rb_states[:, :, 10:]
         self.num_rb = self.rb_states.shape[1]
 
-    def _refresh(self):
+    def refresh_buffers(self):
         """Updates the data in the state tensors, must be called after stepping the simulation"""
         self.gym.refresh_actor_root_state_tensor(self.sim)
         self.gym.refresh_dof_force_tensor(self.sim)
