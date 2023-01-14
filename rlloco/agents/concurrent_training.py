@@ -390,20 +390,14 @@ class ConcurrentTrainingEnv(VecEnv):
 
         self.prev_joint_pos[:] = self.env.get_joint_position()
 
-        """
-        -> step -> refresh -> setxxx() -> step -> 
-        """
+        # actions < (thresh - self.default_dof_pos) / G.action_scale
+        # actions > (-thresh - self.default_dof_pos) / G.action_scale
 
         actions = actions * G.action_scale + self.default_dof_pos
         actions = torch.clamp(actions, min = -self.thresh, max = self.thresh)
-        self.env.step(actions) # step
+        self.env.step(actions)
 
-
-        if len(reset_idx) > 0:
-            new_obs[reset_idx, :] = self.reset_partial(reset_idx) # setxxx
-
-
-        self.env.refresh() # refresh
+        self.env.refresh_buffers()
         self.update_feet_states()
 
         new_obs, reward, terms, names = self.make_observation_and_reward(actions)
@@ -426,6 +420,9 @@ class ConcurrentTrainingEnv(VecEnv):
             reset_idx.add(term_idx.item())
 
         reset_idx = list(reset_idx)
+
+        if len(reset_idx) > 0:
+            new_obs[reset_idx, :] = self.reset_partial(reset_idx)
 
         self.prev_obs.step(new_obs)
 
