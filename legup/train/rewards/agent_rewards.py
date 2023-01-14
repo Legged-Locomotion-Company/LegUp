@@ -1,7 +1,7 @@
 from rewards import *
 
 
-class WildAnymal:
+class WildAnymalReward:
     """
     Reward function for the Wild Anymal robot.
     https://leggedrobotics.github.io/rl-perceptiveloco/assets/pdf/wild_anymal.pdf (pages 18+19)
@@ -23,11 +23,7 @@ class WildAnymal:
         self.dt = dt
         self.knee_threshold = train_config['knee_threshold']
 
-        self.previous_joint_velocities = None
-        self.joint_target_t_1 = None
-        self.joint_target_t_2 = None
-
-    def __call__(self, curriculum_factor: float = 1.0) -> torch.Tensor:
+    def __call__(self, previous_joint_velocities, joint_target_t_1, joint_target_t_2, curriculum_factor: float = 1.0) -> torch.Tensor:
         """Compute reward.
 
         Args:
@@ -67,14 +63,14 @@ class WildAnymal:
 
         # set joint velocities. If no joint history exists, set to zero
         joint_velocities = self.env.get_joint_velocities()
-        if self.previous_joint_velocities is None:
-            self.previous_joint_velocities = torch.zeros_like(joint_velocities)
+        if previous_joint_velocities is None:
+            previous_joint_velocities = torch.zeros_like(joint_velocities)
 
         reward += self.reward_scales['joint_velocites'] * joint_motion(
-            joint_velocities, self.previous_joint_velocities, self.dt, curriculum_factor)
+            joint_velocities, previous_joint_velocities, self.dt, curriculum_factor)
 
         # update previous joint velocities
-        self.previous_joint_velocities = joint_velocities
+        previous_joint_velocities = joint_velocities
 
         # We only set a threshold for the knee joints.
         joint_positions = self.env.get_joint_positions()
@@ -84,16 +80,16 @@ class WildAnymal:
             joint_constraint(knee_joint_positions, self.knee_threshold)
 
         # If no joint history exists (first iteration), set to zero
-        if self.joint_target_t_1 is None:
-            self.joint_target_t_1 = torch.zeros_like(joint_positions)
-            self.joint_target_t_2 = torch.zeros_like(joint_positions)
+        if joint_target_t_1 is None:
+            joint_target_t_1 = torch.zeros_like(joint_positions)
+            joint_target_t_2 = torch.zeros_like(joint_positions)
 
         reward += self.reward_scales['target_smoothness'] * target_smoothness(
-            joint_positions, self.joint_target_t_1, self.joint_target_t_2, curriculum_factor)
+            joint_positions, joint_target_t_1, joint_target_t_2, curriculum_factor)
 
         # update joint target history
-        self.joint_target_t_2 = self.joint_target_t_1
-        self.joint_target_t_1 = joint_positions
+        joint_target_t_2 = joint_target_t_1
+        joint_target_t_1 = joint_positions
 
         # calculate torque reward
         torques = self.env.get_joint_torques()
