@@ -1,5 +1,5 @@
 import torch
-from rlloco.agents.models.anymal.teacher import Teacher
+from legup.train.models.anymal.teacher import Teacher
 
 
 def test_confirm_teacher_dimensions():

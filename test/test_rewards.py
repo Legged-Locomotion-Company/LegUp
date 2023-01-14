@@ -1,4 +1,4 @@
-from rlloco.agents.rewards.rewards import *
+from legup.train.rewards.rewards import *
 from colorama import Fore, Back, Style
 import torch
 import pytest

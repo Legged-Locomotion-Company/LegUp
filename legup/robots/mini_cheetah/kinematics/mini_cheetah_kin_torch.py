@@ -1,7 +1,7 @@
 import torch
 
-from rlloco.robots.common.kinematics.kin_utils import *
-from rlloco.robots.common.kinematics.inv_kin_algs import dls_invkin, pinv_invkin
+from legup.robots.common.kinematics.kin_utils import *
+from legup.robots.common.kinematics.inv_kin_algs import dls_invkin, pinv_invkin
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -65,10 +65,11 @@ def build_jacobian_and_fk(q_vec, leg):
     foot_pos = torso_to_foot_zero_ht @ hip_ht_b @ shoulder_ht_b @ knee_ht_b
 
     minus_hip_ht_b = screwvec_to_ht_batch(-hip_screw_b, hip_angles)
-    minus_shoulder_ht_b = screwvec_to_ht_batch(-shoulder_screw_b, shoulder_angles)
+    minus_shoulder_ht_b = screwvec_to_ht_batch(
+        -shoulder_screw_b, shoulder_angles)
     minus_knee_ht_b = screwvec_to_ht_batch(-knee_screw_b, knee_angles)
     minus_foot_ht_b = screwmat_to_ht_batch(-torch.eye(4, device=device),
-                                     torch.zeros(NUM_ENVS, device=device))
+                                           torch.zeros(NUM_ENVS, device=device))
 
     j_knee_b = knee_screw_b.expand(NUM_ENVS, 6)
     j_shoulder_b = ht_adj_batch(minus_knee_ht_b) @ shoulder_screw_b

@@ -1,7 +1,7 @@
 import torch
 import cProfile
 
-from rlloco.robots.mini_cheetah.kinematics.mini_cheetah_kin_torch import get_home_position, mini_cheetah_dls_invkin, build_jacobian_and_fk_all_feet, build_jacobian_and_fk, mini_cheetah_pinv_invkin
+from legup.robots.mini_cheetah.kinematics.mini_cheetah_kin_torch import get_home_position, mini_cheetah_dls_invkin, build_jacobian_and_fk_all_feet, build_jacobian_and_fk, mini_cheetah_pinv_invkin
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 

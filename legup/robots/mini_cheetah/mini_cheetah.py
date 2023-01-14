@@ -1,7 +1,8 @@
 import torch
 
-from rlloco.robots.Robot import Robot
-from rlloco.robots.mini_cheetah.kinematics.mini_cheetah_kin_torch import build_jacobian_and_fk_all_feet
+from legup.robots.Robot import Robot
+from legup.robots.mini_cheetah.kinematics.mini_cheetah_kin_torch import build_jacobian_and_fk_all_feet
+
 
 class MiniCheetah(Robot):
     """This class respresents the mini_cheetah robot and stores information relevant to it
@@ -41,4 +42,5 @@ class MiniCheetah(Robot):
         Returns:
             (torch.Tensor): A (NUM_ENVS x 4 x 6) vector containing the twist vectors for each of the robots feet
         """
-        raise NotImplementedError("The foot_twist function has not been implemented for the mini_cheetah robot")
+        raise NotImplementedError(
+            "The foot_twist function has not been implemented for the mini_cheetah robot")
