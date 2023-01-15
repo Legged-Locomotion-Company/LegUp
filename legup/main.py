@@ -106,18 +106,20 @@ class CustomWandbCallback(WandbCallback):
         Monitor(env)
 
     def _on_step(self) -> bool:
-        super()._on_step()
-
-        self.video_buffer.append(self.env_.render())
-
         """
         This method will be called by the model after each call to `env.step()`.
+        TODO add a way to save the video every n steps
 
         For child callback (of an `EventCallback`), this will be called
         when the event is triggered.
 
         :return: (bool) If the callback returns False, training is aborted early.
         """
+
+        super()._on_step()
+
+        self.video_buffer.append(self.env_.render())
+
         return True
 
     def _on_rollout_end(self) -> None:
