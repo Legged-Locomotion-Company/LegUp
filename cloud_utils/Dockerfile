@@ -41,20 +41,9 @@ RUN cp ./isaacgym/docker/10_nvidia.json /usr/share/glvnd/egl_vendor.d/10_nvidia.
 
 RUN useradd --create-home legsuser
 
-# Copt legup repo to docker
-COPY . .
-
-# copy gym repo to docker
-RUN chown -R legsuser:legsuser /opt/leggedloco
-
-USER legsuser
-
-# install gym modules
-ENV PATH="/home/legsuser/.local/bin:$PATH"
-RUN pip install -q -e ./isaacgym/python/.
-
 # idk random stuff
 RUN pip install \
+    opencv-python==4.5.4.60 \
     colorama \
     gym \
     numpy \
@@ -69,6 +58,18 @@ RUN pip install \
     imageio \
     wandb
 
+# Copt legup repo to docker
+COPY . .
+
+# copy gym repo to docker
+RUN chown -R legsuser:legsuser /opt/leggedloco
+
+USER legsuser
+
+# install gym modules
+ENV PATH="/home/legsuser/.local/bin:$PATH"
+RUN pip install -q -e ./isaacgym/python/.
+
 ENV NVIDIA_VISIBLE_DEVICES=all NVIDIA_DRIVER_CAPABILITIES=all
 
 RUN pip install -q -e .
@@ -77,4 +78,4 @@ RUN wandb login ab4474327941fce151a79358a59ee85a3377e660
 
 WORKDIR /opt/leggedloco/legup
 
-CMD ["python3", "main.py", "train", "headless"]
+ENTRYPOINT ["python3", "main.py"]
