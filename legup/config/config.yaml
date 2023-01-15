@@ -1,0 +1,3 @@
+defaults:
+  - env: basic_env
+  - agent: anymal_default

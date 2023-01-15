@@ -35,7 +35,7 @@ class BaseAgent(VecEnv):
         self.term_idx = self.all_envs.copy()
 
         self.env = IsaacGymEnvironment(
-            num_environments, True, asset_path, asset_name, self.default_dof_pos)
+            num_environments, True, asset_path, asset_name, robot.home_position)
         self.robot = robot
 
         self.dt = 1. / 60.  # TODO: make this config
@@ -178,7 +178,7 @@ class BaseAgent(VecEnv):
             and all other tensors have shape `(num_envs)`
         """
         # send actions through the network
-        actions = self.compute_actions(actions)
+        actions = self.make_actions(actions)
         self.env.step(actions)
 
         # reset any terminated environments and update buffers

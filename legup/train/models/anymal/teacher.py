@@ -157,10 +157,9 @@ class Teacher(nn.Module):
 class CustomTeacherActorCriticPolicy(ActorCriticPolicy):
     def __init__(self, cfg, *args, **kwargs):
         """Custom policy that uses the Teacher network as the feature extractor."""
-        super(CustomTeacherActorCriticPolicy,
-              self).__init__(cfg, *args, **kwargs)
-
         self.cfg = cfg
+
+        super().__init__(cfg, *args, **kwargs)
 
     def _build_mlp_extractor(self) -> None:
         self.mlp_extractor = Teacher(self.cfg)

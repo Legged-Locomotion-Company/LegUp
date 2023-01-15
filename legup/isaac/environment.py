@@ -237,11 +237,14 @@ class IsaacGymEnvironment:
         """
 
         if actions is not None:
-            self.gym.set_dof_position_target_tensor(
-                self.sim, gymtorch.unwrap_tensor(actions))
+            if isinstance(actions, np.ndarray):
+                actions = torch.from_numpy(actions)
+            if isinstance(actions, torch.Tensor):
+                actions = gymtorch.unwrap_tensor(actions)
         else:
-            self.gym.set_dof_position_target_tensor(
-                self.sim, gymtorch.unwrap_tensor(self.command_dof_pos))
+            actions = gymtorch.unwrap_tensor(self.command_dof_pos)
+
+        self.gym.set_dof_position_target_tensor(self.sim, actions)
 
         self.gym.simulate(self.sim)
         self.gym.fetch_results(self.sim, True)
@@ -252,7 +255,7 @@ class IsaacGymEnvironment:
         """Gets an image of the environment from the camera and returns it
 
         Returns:
-            torch.Tensor: RGB image, shape `(camera_height, camera_width, 4)`
+            np.ndarray: RGB image, shape `(camera_height, camera_width, 4)`
         """
         return self.gym.get_camera_image(self.sim, self.env_actor_handles[0][0], self.camera_handle, gymapi.IMAGE_COLOR).reshape(self.cam_height, self.cam_width, 4)
 

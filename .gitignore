@@ -132,4 +132,12 @@ dmypy.json
 .vscode/*
 
 # checkpoints
-concurrent_training_tb/*
+legup/concurrent_training_tb/*
+
+# docker keys
+Key_LegUp_Docker
+Key_LegUp_Docker.pub
+
+# wandb logs
+legup/wandb/*
+legup/saved_models/*
