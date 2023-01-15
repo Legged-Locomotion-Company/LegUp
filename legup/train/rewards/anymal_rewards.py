@@ -1,6 +1,8 @@
-from legup.train.rewards import *
-
+from omegaconf import DictConfig
 import torch
+
+from legup.robots.Robot import Robot
+from legup.train.rewards import *
 
 
 class WildAnymalReward:
@@ -9,21 +11,21 @@ class WildAnymalReward:
     https://leggedrobotics.github.io/rl-perceptiveloco/assets/pdf/wild_anymal.pdf (pages 18+19)
     """
 
-    def __init__(self, env, robot_config, train_config, dt: float):
+    def __init__(self, env, robot_cfg: Robot, train_cfg: DictConfig, dt: float):
         """Initialize reward function.
 
         Args:
-            env (_type_): Isaac Gym environment
-            robot_config (_type_): Robot interface configuration dictionary
-            train_config (_type_): Configuration dictionary for training
+            env: Isaac Gym environment
+            robot_config (Robot): Robot interface configuration class
+            train_config (DictConfig): Configuration dictionary for training
             dt (float): Time step
         """
         self.env = env
-        self.robot_config = robot_config
-        self.reward_scales = train_config['reward_scales']
+        self.robot_config = robot_cfg
+        self.reward_scales = train_cfg['reward_scales']
 
         self.dt = dt
-        self.knee_threshold = train_config['knee_threshold']
+        self.knee_threshold = train_cfg['knee_threshold']
 
     def __call__(self, previous_joint_velocities: torch.Tensor, joint_target_t_1: torch.Tensor, joint_target_t_2: torch.Tensor, curriculum_factor: float = 1.0) -> torch.Tensor:
         """Compute reward.

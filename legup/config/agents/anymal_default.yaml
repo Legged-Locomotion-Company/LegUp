@@ -1,0 +1,17 @@
+agent:
+  - env_name: anymal
+  - tensorboard_log_dir: ./anymal_train_tb
+  # TODO:no idea what default vals should be, ask misha
+  - knee_threshold: 0.2
+  - max_torque: 10
+  - max_tilt: 180
+  - reward_scales:
+      - velocity: 0.75
+      - body_motion: 1
+      - foot_clearance: 0.003
+      - shank_knee_col: 0.1
+      - joint_velocities: 0.001
+      - joint_constraint: 0.08
+      - target_smoothness: 0.003
+      - torque: 0.000001
+      - slip: 0.003
