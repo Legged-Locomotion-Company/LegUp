@@ -35,7 +35,7 @@ class BaseAgent(VecEnv):
         self.term_idx = self.all_envs.copy()
 
         self.env = IsaacGymEnvironment(
-            num_environments, True, asset_path, asset_name, self.default_dof_pos)
+            num_environments, True, asset_path, asset_name, robot.home_position)
         self.robot = robot
 
         self.dt = 1. / 60.  # TODO: make this config

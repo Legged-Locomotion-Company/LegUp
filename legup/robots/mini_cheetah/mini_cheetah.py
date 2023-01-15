@@ -22,6 +22,8 @@ class MiniCheetah(Robot):
 
     thigh_indices = [2, 5, 8, 11]
 
+    num_joints = 12
+
     def foot_positions(q: torch.Tensor):
         """Calculates the foot positions given joint angles
 
