@@ -18,6 +18,8 @@ class MiniCheetah(Robot):
 
     foot_indices = [3, 6, 9, 12]
 
+    shank_indices = foot_indices
+
     knee_indices = [2, 5, 8, 11]
 
     thigh_indices = [2, 5, 8, 11]
