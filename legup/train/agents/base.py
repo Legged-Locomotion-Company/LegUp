@@ -178,7 +178,7 @@ class BaseAgent(VecEnv):
             and all other tensors have shape `(num_envs)`
         """
         # send actions through the network
-        actions = self.compute_actions(actions)
+        actions = self.make_actions(actions)
         self.env.step(actions)
 
         # reset any terminated environments and update buffers

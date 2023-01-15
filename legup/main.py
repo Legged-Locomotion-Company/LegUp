@@ -4,6 +4,8 @@ from legup.train.agents.anymal import AnymalAgent
 
 from legup.robots.mini_cheetah.mini_cheetah import MiniCheetah
 
+from legup.train.models.anymal.teacher import CustomTeacherActorCriticPolicy
+
 import torch
 import os
 from stable_baselines3 import PPO
@@ -164,7 +166,7 @@ def train_ppo():
     env = AnymalAgent(MiniCheetah, PARALLEL_ENVS, f"{os.getcwd()}/robots/mini_cheetah/physical_models", "mini-cheetah.urdf", train_cfg=train_cfg)
     cb = CustomCallback(env)
 
-    model = PPO('MlpPolicy', env, tensorboard_log='./concurrent_training_tb', verbose=0, policy_kwargs={'net_arch': [512, 256, 64]},
+    model = PPO(CustomTeacherActorCriticPolicy, env, tensorboard_log='./concurrent_training_tb', verbose=0, policy_kwargs={'net_arch': [512, 256, 64]},
                 batch_size=BATCH_SIZE, n_steps=N_STEPS, n_epochs=N_EPOCHS, ent_coef=ENTROPY_COEF, learning_rate=LEARNING_RATE, clip_range=CLIP_RANGE, gae_lambda=GAE_LAMBDA, gamma=DISCOUNT, vf_coef=VALUE_COEF)
 
     model.learn(total_timesteps=TOTAL_TIMESTEPS, callback=cb)

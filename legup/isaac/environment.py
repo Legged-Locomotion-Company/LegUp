@@ -237,11 +237,14 @@ class IsaacGymEnvironment:
         """
 
         if actions is not None:
-            self.gym.set_dof_position_target_tensor(
-                self.sim, gymtorch.unwrap_tensor(actions))
+            if isinstance(actions, np.ndarray):
+                actions = torch.from_numpy(actions)
+            if isinstance(actions, torch.Tensor):
+                actions = gymtorch.unwrap_tensor(actions)
         else:
-            self.gym.set_dof_position_target_tensor(
-                self.sim, gymtorch.unwrap_tensor(self.command_dof_pos))
+            actions = gymtorch.unwrap_tensor(self.command_dof_pos)
+
+        self.gym.set_dof_position_target_tensor(self.sim, actions)
 
         self.gym.simulate(self.sim)
         self.gym.fetch_results(self.sim, True)
