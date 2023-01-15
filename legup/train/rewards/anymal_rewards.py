@@ -1,4 +1,6 @@
-from rewards import *
+from legup.train.rewards import *
+
+import torch
 
 
 class WildAnymalReward:
@@ -38,10 +40,10 @@ class WildAnymalReward:
         w_des = self.env.get_desired_angular_velocity()
         w_act = self.env.get_actual_angular_velocity()
 
-        velocity_reawrds = lin_velocity(v_des, v_act) + ang_velocity(
+        velocity_rewards = lin_velocity(v_des, v_act) + ang_velocity(
             w_des[:, 2], w_act[:, 2]) + linear_ortho_velocity(v_des, v_act)
 
-        reward = self.reward_scales['velocity'] * velocity_reawrds
+        reward = self.reward_scales['velocity'] * velocity_rewards
 
         reward += self.reward_scales['body_motion'] * \
             body_motion(v_act[:, 2], w_act[:, 0], w_act[:, 1])

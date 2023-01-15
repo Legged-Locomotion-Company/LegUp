@@ -1,5 +1,5 @@
 from legup.train.agents.base import BaseAgent
-from legup.train.rewards.agent_rewards import WildAnymalReward
+from legup.train.rewards.anymal_rewards import WildAnymalReward
 
 import torch
 from typing import List
@@ -14,7 +14,8 @@ class AnymalAgent(BaseAgent):
 
         # need more stuff for reward function like train config
         self.dt = 1/60
-        self.reward_fn = WildAnymalReward(self.env, dt=self.dt)
+        # (self, env, robot_config, train_config, dt: float):
+        self.reward_fn = WildAnymalReward(self.env, robot_cfg, train_cfg, dt=self.dt)
         self.robot_cfg = robot_cfg
         self.train_cfg = train_cfg
 
@@ -34,7 +35,7 @@ class AnymalAgent(BaseAgent):
             self.joint_target_history = torch.zeros(
                 self.num_envs, self.robot_cfg.num_joints, 2).to(self.device)
 
-    def make_obersevation_vec(self, idx=None):
+    def make_observation(self, idx=None):
         if idx is None:
             idx = torch.arange(self.num_envs)
 
@@ -44,7 +45,7 @@ class AnymalAgent(BaseAgent):
 
         # TODO: talk to rohan about the command
 
-        proprio[idx, :3] = self.command[idx]
+        proprio[idx, :3] = torch.tensor([1., 0., 0.]).to(self.device)#self.command[idx]
 
         proprio[idx, 3:6] = self.env.get_position()[idx]
         proprio[idx, 6:9] = self.env.get_linear_velocity()[idx]
@@ -84,7 +85,7 @@ class AnymalAgent(BaseAgent):
         self.joint_target_history[idx, :, 0] = self.env.get_joint_position()[
             idx]
 
-        return torch.cat([proprio, extro, privil], dim=1)[idx]
+        return (torch.cat([proprio, extro, privil], dim=1)[idx]).cpu().numpy()
 
     # TODO: talk to Rohan - Base class passes in actions, unecessary for this reward function
     def make_reward(self, actions: torch.Tensor) -> torch.Tensor:

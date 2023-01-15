@@ -36,6 +36,8 @@ class Robot:
 
     # This one should be a tensor which contains the indices of all of links which immediately precede the knee links
     thigh_indices: List[int]
+
+    num_joints: int
     
 
     def foot_positions(q: torch.Tensor) -> torch.Tensor:

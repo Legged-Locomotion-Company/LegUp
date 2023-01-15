@@ -1,5 +1,9 @@
 from legup.train.agents.concurrent_training import ConcurrentTrainingEnv
 
+from legup.train.agents.anymal import AnymalAgent
+
+from legup.robots.mini_cheetah.mini_cheetah import MiniCheetah
+
 import torch
 import os
 from stable_baselines3 import PPO
@@ -84,7 +88,7 @@ class CustomCallback(BaseCallback):
 
 
 # number of parallel environments to run
-PARALLEL_ENVS = 4096
+PARALLEL_ENVS = 128
 
 # number of experiences to collect per parallel environment
 N_STEPS = 256
@@ -134,8 +138,30 @@ class GPUVecEnv(ConcurrentTrainingEnv):
 
 
 def train_ppo():
-    env = GPUVecEnv(
-        PARALLEL_ENVS, f"{os.getcwd()}/robots/mini_cheetah/physical_models", "mini-cheetah.urdf")
+    # env = GPUVecEnv(
+    #     PARALLEL_ENVS, f"{os.getcwd()}/robots/mini_cheetah/physical_models", "mini-cheetah.urdf")
+
+    reward_scales = {}
+    reward_scales['velocity'] = 0.0
+    reward_scales['body_motion'] = 0.0
+    reward_scales['foot_clearance'] = 0.0
+    reward_scales['shank_clearance'] = 0.0
+    reward_scales['joint_velocity'] = 0.0
+    reward_scales['joint_constraints'] = 0.0
+    reward_scales['target_smoothness'] = 0.0
+    reward_scales['torque'] = 0.0
+    reward_scales['slip'] = 0.0
+
+    train_cfg = {}
+    train_cfg["max_tilt"] = 3*torch.pi/2
+    train_cfg["max_torque"] = 90.0
+
+    train_cfg['knee_threshold'] = [0.5, 0.5, 0.5, 0.5]
+
+    train_cfg['reward_scales'] = reward_scales
+
+
+    env = AnymalAgent(MiniCheetah, PARALLEL_ENVS, f"{os.getcwd()}/robots/mini_cheetah/physical_models", "mini-cheetah.urdf", train_cfg=train_cfg)
     cb = CustomCallback(env)
 
     model = PPO('MlpPolicy', env, tensorboard_log='./concurrent_training_tb', verbose=0, policy_kwargs={'net_arch': [512, 256, 64]},
