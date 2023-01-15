@@ -3,9 +3,18 @@ from legup.train.agents.concurrent_training import ConcurrentTrainingEnv
 import torch
 import os
 from stable_baselines3 import PPO
+from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.callbacks import BaseCallback
 
 import cv2
+
+import sys
+
+import wandb
+
+from wandb.integration.sb3 import WandbCallback
+
+import numpy as np
 
 
 class CustomCallback(BaseCallback):
@@ -83,6 +92,48 @@ class CustomCallback(BaseCallback):
         pass
 
 
+class CustomWandbCallback(WandbCallback):
+    def __init__(self, env, verbose=0):
+        super().__init__(verbose)
+        self.env_ = env
+        self.video_buffer = []
+
+    def _on_step(self) -> bool:
+        super()._on_step()
+
+        self.video_buffer.append(self.env_.render())
+
+        """
+        This method will be called by the model after each call to `env.step()`.
+
+        For child callback (of an `EventCallback`), this will be called
+        when the event is triggered.
+
+        :return: (bool) If the callback returns False, training is aborted early.
+        """
+        return True
+
+    def _on_rollout_end(self) -> None:
+        """
+        This event is triggered before updating the policy.
+        """
+
+        super()._on_rollout_end()
+
+        numpy_video = np.array(self.video_buffer).transpose([0,3,1,2])
+
+        wandb.log(
+            {"video": wandb.Video(numpy_video, fps=60, format="gif")})
+
+        infos = self.locals['infos'][0]
+        for idx, name in enumerate(infos['names']):
+            self.logger.record(f"rewards/{name}", infos['terms'][idx].item())
+
+        self.model.save(os.path.join('saved_models', str(self.num_timesteps)))
+
+        self.video_buffer = []
+
+
 # number of parallel environments to run
 PARALLEL_ENVS = 4096
 
@@ -133,12 +184,23 @@ class GPUVecEnv(ConcurrentTrainingEnv):
 # Trains the agent using PPO from stable_baselines3. Tensorboard logging to './concurrent_training_tb' and saves model to ConcurrentTrainingEnv
 
 
-def train_ppo():
+def train_ppo(headless=False):
     env = GPUVecEnv(
         PARALLEL_ENVS, f"{os.getcwd()}/robots/mini_cheetah/physical_models", "mini-cheetah.urdf")
+
     cb = CustomCallback(env)
 
-    model = PPO('MlpPolicy', env, tensorboard_log='./concurrent_training_tb', verbose=0, policy_kwargs={'net_arch': [512, 256, 64]},
+    if (headless):
+        config = {
+            "learning_rate": LEARNING_RATE,
+            "epochs": N_EPOCHS,
+            "batch_size": BATCH_SIZE,
+        }
+        wandb.init(project="LegUp", config=config, entity="legged-locomotion-company")
+
+        cb = CustomWandbCallback(env)
+
+    model = PPO('MlpPolicy', env, tensorboard_log='./concurrent_training_tb', verbose=1, policy_kwargs={'net_arch': [512, 256, 64]},
                 batch_size=BATCH_SIZE, n_steps=N_STEPS, n_epochs=N_EPOCHS, ent_coef=ENTROPY_COEF, learning_rate=LEARNING_RATE, clip_range=CLIP_RANGE, gae_lambda=GAE_LAMBDA, gamma=DISCOUNT, vf_coef=VALUE_COEF)
 
     model.learn(total_timesteps=TOTAL_TIMESTEPS, callback=cb)
@@ -161,5 +223,24 @@ def eval_ppo():
 
 
 if __name__ == '__main__':
+
+    def print_usage():
+        print('Valid usage is python3 main.py [train|eval] [headless|headful]')
+
+    if len(sys.argv) >= 2:
+        if sys.argv[1] == 'train':
+            headless = False
+            if len(sys.argv) >= 3:
+                if sys.argv[2] == 'headless':
+                    headless = True
+                elif sys.argv[2] != 'headful':
+                    print_usage()
+
+            train_ppo(headless)
+        elif sys.argv[1] == 'eval':
+            eval_ppo()
+        else:
+            print_usage()
+
     train_ppo()
     # eval_ppo()

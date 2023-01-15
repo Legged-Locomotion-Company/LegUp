@@ -61,7 +61,9 @@ RUN pip install \
     scipy \
     setuptools \
     stable_baselines3 \
-    torchgeometry
+    torchgeometry \
+    moviepy \
+    imageio
 
 ENV NVIDIA_VISIBLE_DEVICES=all NVIDIA_DRIVER_CAPABILITIES=all
 
@@ -71,4 +73,4 @@ RUN pip install -q -e .
 
 WORKDIR /opt/leggedloco/legup
 
-CMD ["python3", "main.py"]
+CMD ["python3", "main.py", "train", "headless"]
