@@ -41,8 +41,11 @@ RUN cp ./isaacgym/docker/10_nvidia.json /usr/share/glvnd/egl_vendor.d/10_nvidia.
 
 RUN useradd --create-home legsuser
 
+# Copt legup repo to docker
+COPY . .
+
 # copy gym repo to docker
-RUN chown -R legsuser:legsuser ./isaacgym
+RUN chown -R legsuser:legsuser /opt/leggedloco
 
 USER legsuser
 
@@ -63,13 +66,14 @@ RUN pip install \
     stable_baselines3 \
     torchgeometry \
     moviepy \
-    imageio
+    imageio \
+    wandb
 
 ENV NVIDIA_VISIBLE_DEVICES=all NVIDIA_DRIVER_CAPABILITIES=all
 
-COPY --chown=legsuser . .
-
 RUN pip install -q -e .
+
+RUN wandb login ab4474327941fce151a79358a59ee85a3377e660
 
 WORKDIR /opt/leggedloco/legup
 

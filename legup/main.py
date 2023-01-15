@@ -93,10 +93,12 @@ class CustomCallback(BaseCallback):
 
 
 class CustomWandbCallback(WandbCallback):
-    def __init__(self, env, verbose=0):
-        super().__init__(verbose)
+    def __init__(self, env, verbose=1):
+        super().__init__(gradient_save_freq=100, model_save_path='saved_models', verbose=verbose)
         self.env_ = env
         self.video_buffer = []
+
+        Monitor(env)
 
     def _on_step(self) -> bool:
         super()._on_step()
@@ -120,10 +122,12 @@ class CustomWandbCallback(WandbCallback):
 
         super()._on_rollout_end()
 
+        # For some reason the video needs to be transposed to frames, channels, height, width
+
         numpy_video = np.array(self.video_buffer).transpose([0,3,1,2])
 
         wandb.log(
-            {"video": wandb.Video(numpy_video, fps=60, format="gif")})
+            {"video": wandb.Video(numpy_video, fps=20, format="gif")})
 
         infos = self.locals['infos'][0]
         for idx, name in enumerate(infos['names']):
@@ -195,8 +199,9 @@ def train_ppo(headless=False):
             "learning_rate": LEARNING_RATE,
             "epochs": N_EPOCHS,
             "batch_size": BATCH_SIZE,
+            "env_name": "ConcurrentTrainingEnv",
         }
-        wandb.init(project="LegUp", config=config, entity="legged-locomotion-company")
+        wandb.init(project="LegUp", config=config, entity="legged-locomotion-company", sync_tensorboard=True, monitor_gym=True, save_code=True)
 
         cb = CustomWandbCallback(env)
 
