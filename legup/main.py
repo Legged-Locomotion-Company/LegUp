@@ -1,5 +1,7 @@
 from legup.train.agents.concurrent_training import ConcurrentTrainingEnv
 
+import cv2
+
 from legup.train.agents.anymal import AnymalAgent
 
 from legup.robots.mini_cheetah.mini_cheetah import MiniCheetah
@@ -9,9 +11,14 @@ from legup.train.models.anymal.teacher import CustomTeacherActorCriticPolicy
 import torch
 import os
 from stable_baselines3 import PPO
+from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.callbacks import BaseCallback
 
-import cv2
+import wandb
+from wandb.integration.sb3 import WandbCallback
+
+import numpy as np
+import argparse
 
 
 class CustomCallback(BaseCallback):
@@ -89,6 +96,53 @@ class CustomCallback(BaseCallback):
         pass
 
 
+class CustomWandbCallback(WandbCallback):
+    def __init__(self, env, verbose=1):
+        super().__init__(gradient_save_freq=100,
+                         model_save_path='saved_models', verbose=verbose)
+        self.env_ = env
+        self.video_buffer = []
+
+        Monitor(env)
+
+    def _on_step(self) -> bool:
+        super()._on_step()
+
+        self.video_buffer.append(self.env_.render())
+
+        """
+        This method will be called by the model after each call to `env.step()`.
+
+        For child callback (of an `EventCallback`), this will be called
+        when the event is triggered.
+
+        :return: (bool) If the callback returns False, training is aborted early.
+        """
+        return True
+
+    def _on_rollout_end(self) -> None:
+        """
+        This event is triggered before updating the policy.
+        """
+
+        super()._on_rollout_end()
+
+        # For some reason the video needs to be transposed to frames, channels, height, width
+
+        numpy_video = np.array(self.video_buffer).transpose([0, 3, 1, 2])
+
+        wandb.log(
+            {"video": wandb.Video(numpy_video, fps=20, format="gif")})
+
+        infos = self.locals['infos'][0]
+        for idx, name in enumerate(infos['names']):
+            self.logger.record(f"rewards/{name}", infos['terms'][idx].item())
+
+        self.model.save(os.path.join('saved_models', str(self.num_timesteps)))
+
+        self.video_buffer = []
+
+
 # number of parallel environments to run
 PARALLEL_ENVS = 128
 
@@ -139,10 +193,13 @@ class GPUVecEnv(ConcurrentTrainingEnv):
 # Trains the agent using PPO from stable_baselines3. Tensorboard logging to './concurrent_training_tb' and saves model to ConcurrentTrainingEnv
 
 
-def train_ppo():
-    # env = GPUVecEnv(
-    #     PARALLEL_ENVS, f"{os.getcwd()}/robots/mini_cheetah/physical_models", "mini-cheetah.urdf")
+def train_ppo(headless=False, env_name="ConcurrentTrainingEnv", parallel_envs=4096, n_steps=256, n_epochs=5, batch_size=32768, entropy_coef=0.01, value_coef=0.5, learning_rate=3e-4, gae_lambda=0.95, discount=0.99, clip_range=0.2):
+    total_timesteps = parallel_envs * n_steps * 10000
 
+    # env = GPUVecEnv(
+    #     parallel_envs, f"{os.getcwd()}/robots/mini_cheetah/physical_models", "mini-cheetah.urdf")
+
+    
     reward_scales = {}
     reward_scales['velocity'] = 0.0
     reward_scales['body_motion'] = 0.0
@@ -164,13 +221,37 @@ def train_ppo():
 
 
     env = AnymalAgent(MiniCheetah, PARALLEL_ENVS, f"{os.getcwd()}/robots/mini_cheetah/physical_models", "mini-cheetah.urdf", train_cfg=train_cfg)
-    cb = CustomCallback(env)
 
-    model = PPO(CustomTeacherActorCriticPolicy, env, tensorboard_log='./concurrent_training_tb', verbose=0, policy_kwargs={'net_arch': [512, 256, 64]},
-                batch_size=BATCH_SIZE, n_steps=N_STEPS, n_epochs=N_EPOCHS, ent_coef=ENTROPY_COEF, learning_rate=LEARNING_RATE, clip_range=CLIP_RANGE, gae_lambda=GAE_LAMBDA, gamma=DISCOUNT, vf_coef=VALUE_COEF)
+
+    cb = None
+
+    if (not headless):
+        cb = CustomCallback(env)
+    else:
+        config = {
+            "env_name": env_name,
+            "parallel_envs": parallel_envs,
+            "n_steps": n_steps,
+            "n_epochs": n_epochs,
+            "batch_size": batch_size,
+            "total_timesteps": total_timesteps,
+            "entropy_coef": entropy_coef,
+            "value_coef": value_coef,
+            "learning_rate": learning_rate,
+            "gae_lambda": gae_lambda,
+            "discount": discount,
+            "clip_range": clip_range,
+        }
+        wandb.init(project="LegUp", config=config, entity="legged-locomotion-company",
+                   sync_tensorboard=True, monitor_gym=True, save_code=True)
+
+        cb = CustomWandbCallback(env)
+
+    model = PPO(CustomTeacherActorCriticPolicy, env, tensorboard_log='./concurrent_training_tb', verbose=1, policy_kwargs={'net_arch': [512, 256, 64]},
+                batch_size=batch_size, n_steps=n_steps, n_epochs=n_epochs, ent_coef=entropy_coef, learning_rate=learning_rate, clip_range=clip_range, gae_lambda=gae_lambda, gamma=discount, vf_coef=value_coef)
 
     model.learn(total_timesteps=TOTAL_TIMESTEPS, callback=cb)
-    model.save('ConcurrentTrainingEnv')
+    model.save(model)
 
 # Runs the agent based on a saved model
 
@@ -189,5 +270,37 @@ def eval_ppo():
 
 
 if __name__ == '__main__':
-    train_ppo()
-    # eval_ppo()
+
+    def print_usage():
+        print('Valid usage is python3 main.py [train|eval] [headless|headful]')
+
+    parser = argparse.ArgumentParser(
+        prog='LegUp',
+        description='LegUp is a legged locomotion simulator and reinforcement learning framework.',
+        epilog='',)
+
+    parser.add_argument('mode', type=str, choices=['train', 'eval'])
+
+    parser.add_argument('env', type=str)
+    parser.add_argument('-l', '--headless', action='store_true', default=False)
+    parser.add_argument('-p', '--parallel_envs', type=int, default=4096)
+    parser.add_argument('-n', '--n_steps', type=int, default=256)
+    parser.add_argument('-e', '--n_epochs', type=int, default=5)
+    parser.add_argument('-b', '--batch_size', type=int, default=32768)
+
+    # add this functionality later
+    # parser.add_argument('-c', '--checkpoint', type=str, default=None)
+
+    args = parser.parse_args()
+
+    if args.mode == 'train':
+        train_ppo(
+            headless=args.headless,
+            env_name=args.env,
+            parallel_envs=args.parallel_envs,
+            n_steps=args.n_steps,
+            n_epochs=args.n_epochs,
+            batch_size=args.batch_size,)
+
+    elif args.mode == 'eval':
+        eval_ppo()
