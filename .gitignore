@@ -133,3 +133,5 @@ dmypy.json
 
 # checkpoints
 concurrent_training_tb/*
+Key_LegUp_Docker
+Key_LegUp_Docker.pub
