@@ -1,24 +1,21 @@
-from legup.train.agents.concurrent_training import ConcurrentTrainingEnv
-
+import argparse
 import cv2
-
-from legup.train.agents.anymal import AnymalAgent
-
-from legup.robots.mini_cheetah.mini_cheetah import MiniCheetah
-
-from legup.train.models.anymal.teacher import CustomTeacherActorCriticPolicy
-
-import torch
+import hydra
+import numpy as np
+from omegaconf import DictConfig
 import os
 from stable_baselines3 import PPO
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.callbacks import BaseCallback
-
+import torch
 import wandb
 from wandb.integration.sb3 import WandbCallback
 
-import numpy as np
-import argparse
+
+from legup.robots.mini_cheetah.mini_cheetah import MiniCheetah
+from legup.train.agents.anymal import AnymalAgent
+from legup.train.agents.concurrent_training import ConcurrentTrainingEnv
+from legup.train.models.anymal.teacher import CustomTeacherActorCriticPolicy
 
 
 class CustomCallback(BaseCallback):
@@ -145,33 +142,6 @@ class CustomWandbCallback(WandbCallback):
         self.video_buffer = []
 
 
-# number of parallel environments to run
-PARALLEL_ENVS = 128
-
-# number of experiences to collect per parallel environment
-N_STEPS = 256
-
-# number of time we go through the entire rollout
-N_EPOCHS = 5
-
-# minibatch size
-BATCH_SIZE = 32768
-
-# total number of timesteps where each collection is one timestep
-TOTAL_TIMESTEPS = PARALLEL_ENVS * N_STEPS * 10000
-
-ENTROPY_COEF = 0.01
-
-VALUE_COEF = 0.5
-
-LEARNING_RATE = 3e-4
-
-GAE_LAMBDA = 0.95
-
-DISCOUNT = 0.99
-
-CLIP_RANGE = 0.2
-
 # Wrapper for ConcurrentTrainingEnv to convert returned torch tensors to numpy and input numpy arrays to torch tensors
 
 
@@ -195,54 +165,34 @@ class GPUVecEnv(ConcurrentTrainingEnv):
 # Trains the agent using PPO from stable_baselines3. Tensorboard logging to './concurrent_training_tb' and saves model to ConcurrentTrainingEnv
 
 
-def train_ppo(headless=False, env_name="ConcurrentTrainingEnv", parallel_envs=4096, n_steps=256, n_epochs=5, batch_size=32768, entropy_coef=0.01, value_coef=0.5, learning_rate=3e-4, gae_lambda=0.95, discount=0.99, clip_range=0.2):
-    total_timesteps = parallel_envs * n_steps * 10000
+@hydra.main(config_path="config", config_name="config")
+def train_ppo(cfg: DictConfig):
+    total_timesteps = cfg.env.parallel_envs * cfg.env.n_steps * cfg.env.n_epochs
 
     # env = GPUVecEnv(
     #     parallel_envs, f"{os.getcwd()}/robots/mini_cheetah/physical_models", "mini-cheetah.urdf")
 
-    
-    reward_scales = {}
-    reward_scales['velocity'] = 0.0
-    reward_scales['body_motion'] = 0.0
-    reward_scales['foot_clearance'] = 0.0
-    reward_scales['shank_clearance'] = 0.0
-    reward_scales['joint_velocity'] = 0.0
-    reward_scales['joint_constraints'] = 0.0
-    reward_scales['target_smoothness'] = 0.0
-    reward_scales['torque'] = 0.0
-    reward_scales['slip'] = 0.0
-
-    train_cfg = {}
-    train_cfg["max_tilt"] = 3*torch.pi/2
-    train_cfg["max_torque"] = 90.0
-
-    train_cfg['knee_threshold'] = [0.5, 0.5, 0.5, 0.5]
-
-    train_cfg['reward_scales'] = reward_scales
-
-
-    env = AnymalAgent(MiniCheetah, PARALLEL_ENVS, f"{os.getcwd()}/robots/mini_cheetah/physical_models", "mini-cheetah.urdf", train_cfg=train_cfg)
-
+    env = AnymalAgent(MiniCheetah, cfg.env.parallel_envs,
+                      f"{os.getcwd()}/robots/mini_cheetah/physical_models", "mini-cheetah.urdf", train_cfg=cfg.agent)
 
     cb = None
 
-    if (not headless):
+    if (not cfg.env.headless):
         cb = CustomCallback(env)
     else:
         config = {
-            "env_name": env_name,
-            "parallel_envs": parallel_envs,
-            "n_steps": n_steps,
-            "n_epochs": n_epochs,
-            "batch_size": batch_size,
+            "env_name": cfg.agent.env_name,
+            "parallel_envs": cfg.env.parallel_envs,
+            "n_steps": cfg.env.n_steps,
+            "n_epochs": cfg.env.n_epochs,
+            "batch_size": cfg.env.batch_size,
             "total_timesteps": total_timesteps,
-            "entropy_coef": entropy_coef,
-            "value_coef": value_coef,
-            "learning_rate": learning_rate,
-            "gae_lambda": gae_lambda,
-            "discount": discount,
-            "clip_range": clip_range,
+            "entropy_coef": cfg.env.entropy_coef,
+            "value_coef": cfg.env.value_coef,
+            "learning_rate": cfg.env.learning_rate,
+            "gae_lambda": cfg.env.gae_lambda,
+            "discount": cfg.env.discount,
+            "clip_range": cfg.env.clip_range,
         }
         wandb.init(project="LegUp", config=config, entity="legged-locomotion-company",
                    sync_tensorboard=True, monitor_gym=True, save_code=True)
@@ -250,9 +200,10 @@ def train_ppo(headless=False, env_name="ConcurrentTrainingEnv", parallel_envs=40
         cb = CustomWandbCallback(env)
 
     model = PPO(CustomTeacherActorCriticPolicy, env, tensorboard_log='./concurrent_training_tb', verbose=1, policy_kwargs={'net_arch': [512, 256, 64]},
-                batch_size=batch_size, n_steps=n_steps, n_epochs=n_epochs, ent_coef=entropy_coef, learning_rate=learning_rate, clip_range=clip_range, gae_lambda=gae_lambda, gamma=discount, vf_coef=value_coef)
+                batch_size=cfg.env.batch_size, n_steps=cfg.env.n_steps, n_epochs=cfg.env.n_epochs, ent_coef=cfg.env.entropy_coef,
+                learning_rate=cfg.env.learning_rate, clip_range=cfg.env.clip_range, gae_lambda=cfg.env.gae_lambda, gamma=cfg.env.discount, vf_coef=cfg.env.value_coef)
 
-    model.learn(total_timesteps=TOTAL_TIMESTEPS, callback=cb)
+    model.learn(total_timesteps=total_timesteps, callback=cb)
     model.save(model)
 
 # Runs the agent based on a saved model
@@ -283,26 +234,13 @@ if __name__ == '__main__':
 
     parser.add_argument('mode', type=str, choices=['train', 'eval'])
 
-    parser.add_argument('env', type=str)
-    parser.add_argument('-l', '--headless', action='store_true', default=False)
-    parser.add_argument('-p', '--parallel_envs', type=int, default=4096)
-    parser.add_argument('-n', '--n_steps', type=int, default=256)
-    parser.add_argument('-e', '--n_epochs', type=int, default=5)
-    parser.add_argument('-b', '--batch_size', type=int, default=32768)
-
     # add this functionality later
     # parser.add_argument('-c', '--checkpoint', type=str, default=None)
 
     args = parser.parse_args()
 
     if args.mode == 'train':
-        train_ppo(
-            headless=args.headless,
-            env_name=args.env,
-            parallel_envs=args.parallel_envs,
-            n_steps=args.n_steps,
-            n_epochs=args.n_epochs,
-            batch_size=args.batch_size,)
+        train_ppo()
 
     elif args.mode == 'eval':
         eval_ppo()
