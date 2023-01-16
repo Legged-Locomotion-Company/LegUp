@@ -34,6 +34,8 @@ class BaseAgent(VecEnv):
         self.num_envs = num_environments
         self.term_idx = self.all_envs.copy()
 
+        self.ep_lens = torch.zeros(num_environments).to(self.device)
+
         self.env = IsaacGymEnvironment(
             num_environments, True, asset_path, asset_name, robot.home_position)
         self.robot = robot

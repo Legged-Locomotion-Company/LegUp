@@ -50,15 +50,19 @@ def ang_velocity(w_des_yaw, w_act_yaw):
         torch.Tensor: the reward for each env of shape (num_envs,)
     """
 
-    # dot product = elementwise multiplication since w_des_yaw and w_act_yaw are 1D
+    # elementwise multiplication since w_des_yaw and w_act_yaw are 1D
     dot_w_des_w_act = w_des_yaw * w_act_yaw
 
-    x = torch.exp(-torch.pow(w_act_yaw, 2)) * (w_des_yaw == 0)
-    x = 1 * (dot_w_des_w_act > w_des_yaw)
-    x = torch.exp(-torch.pow(dot_w_des_w_act - w_des_yaw, 2)) * \
-        ~((w_des_yaw == 0) + (w_des_yaw * w_act_yaw > w_des_yaw))
+    x = torch.exp(-torch.pow(dot_w_des_w_act - w_des_yaw, 2)) 
 
-    return x.squeeze(1)
+    # This is the case for when w_des_yaw is 0
+    x[w_des_yaw == 0] = torch.exp(-torch.pow(w_act_yaw, 2)) * (w_des_yaw == 0)
+
+    # This is the case for when dot_w_des_w_act > w_des_yaw
+    x[dot_w_des_w_act > w_des_yaw] = 1.0
+    
+
+    return x
 
 
 def linear_ortho_velocity(v_des: torch.Tensor, v_act: torch.Tensor) -> torch.Tensor:
@@ -91,7 +95,7 @@ def body_motion(v_z: torch.Tensor, w_x: torch.Tensor, w_y: torch.Tensor) -> torc
     Returns:
         torch.Tensor: the reward for each env of shape (num_envs,)
     """
-    return (-1.25*torch.pow(v_z, 2) - 0.4 * torch.abs(w_x) - 0.4 * torch.abs(w_y)).squeeze(1)
+    return (-1.25*torch.pow(v_z, 2) - 0.4 * torch.abs(w_x) - 0.4 * torch.abs(w_y))
 
 
 def foot_clearance(h: torch.Tensor) -> torch.Tensor:
@@ -103,7 +107,7 @@ def foot_clearance(h: torch.Tensor) -> torch.Tensor:
     Returns:
         torch.Tensor: the reward for each env of shape (num_envs,)
     """
-    return torch.sum(-1 * (torch.max(h, dim=2)[0] < -0.2), dim=1)
+    return torch.sum(-1 * (h > 0.2), dim=1)
 
 
 def shank_or_knee_col(is_col: torch.Tensor, curriculum_factor: float) -> torch.Tensor:

@@ -212,12 +212,15 @@ def train_ppo(headless=False, env_name="ConcurrentTrainingEnv", parallel_envs=40
     reward_scales['target_smoothness'] = 0.0
     reward_scales['torque'] = 0.0
     reward_scales['slip'] = 0.0
+    reward_scales['shank_knee_col'] = 0.0
 
     train_cfg = {}
     train_cfg["max_tilt"] = 3*torch.pi/2
     train_cfg["max_torque"] = 90.0
 
-    train_cfg['knee_threshold'] = [0.5, 0.5, 0.5, 0.5]
+    train_cfg['desired_linear_velocity'] = 1.0
+    train_cfg['desired_angular_velocity'] = 0.0
+    train_cfg['knee_threshold'] = 0.5#[0.5, 0.5, 0.5, 0.5]
 
     train_cfg['reward_scales'] = reward_scales
 
