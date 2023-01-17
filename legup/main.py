@@ -170,32 +170,32 @@ class GPUVecEnv(ConcurrentTrainingEnv):
 
 def train_ppo(cfg: DictConfig):
 
-    total_timesteps = cfg.env.parallel_envs * cfg.env.n_steps * cfg.env.n_epochs
+    total_timesteps = cfg.environment.parallel_envs * cfg.environment.n_steps * cfg.environment.n_epochs
 
     root_path = os.path.dirname(os.path.abspath(__file__))
 
-    env = AnymalAgent(MiniCheetah, cfg.env.parallel_envs,
+    env = AnymalAgent(MiniCheetah, cfg.environment.parallel_envs,
                       f"{root_path}/robots/mini_cheetah/physical_models", "mini-cheetah.urdf", train_cfg=cfg.agent)
 
 
     cb = None
 
-    if (not cfg.env.headless):
+    if (not cfg.environment.headless):
         cb = CustomCallback(env)
     else:
         config = {
             "env_name": cfg.agent.env_name,
             "parallel_envs": cfg.env.parallel_envs,
-            "n_steps": cfg.env.n_steps,
-            "n_epochs": cfg.env.n_epochs,
-            "batch_size": cfg.env.batch_size,
+            "n_steps": cfg.environment.n_steps,
+            "n_epochs": cfg.environment.n_epochs,
+            "batch_size": cfg.environment.batch_size,
             "total_timesteps": total_timesteps,
-            "entropy_coef": cfg.env.entropy_coef,
-            "value_coef": cfg.env.value_coef,
-            "learning_rate": cfg.env.learning_rate,
-            "gae_lambda": cfg.env.gae_lambda,
-            "discount": cfg.env.discount,
-            "clip_range": cfg.env.clip_range,
+            "entropy_coef": cfg.environment.entropy_coef,
+            "value_coef": cfg.environment.value_coef,
+            "learning_rate": cfg.environment.learning_rate,
+            "gae_lambda": cfg.environment.gae_lambda,
+            "discount": cfg.environment.discount,
+            "clip_range": cfg.environment.clip_range,
         }
         wandb.init(project="LegUp", config=config, entity="legged-locomotion-company",
                    sync_tensorboard=True, monitor_gym=True, save_code=True)
@@ -203,8 +203,8 @@ def train_ppo(cfg: DictConfig):
         cb = CustomWandbCallback(env)
 
     model = PPO(CustomTeacherActorCriticPolicy, env, tensorboard_log='./concurrent_training_tb', verbose=1, policy_kwargs={'net_arch': [512, 256, 64]},
-                batch_size=cfg.env.batch_size, n_steps=cfg.env.n_steps, n_epochs=cfg.env.n_epochs, ent_coef=cfg.env.entropy_coef,
-                learning_rate=cfg.env.learning_rate, clip_range=cfg.env.clip_range, gae_lambda=cfg.env.gae_lambda, gamma=cfg.env.discount, vf_coef=cfg.env.value_coef)
+                batch_size=cfg.environment.batch_size, n_steps=cfg.environment.n_steps, n_epochs=cfg.environment.n_epochs, ent_coef=cfg.environment.entropy_coef,
+                learning_rate=cfg.environment.learning_rate, clip_range=cfg.environment.clip_range, gae_lambda=cfg.environment.gae_lambda, gamma=cfg.environment.discount, vf_coef=cfg.environment.value_coef)
 
     model.learn(total_timesteps=total_timesteps, callback=cb)
     model.save(model)

@@ -26,12 +26,20 @@ class BaseReward:
         return reward_value
 
 
-class CommandVelocityReward(BaseReward):
-    """Reward function which encourages the robot to move at the command velocity."""
+class CommandSpeedReward(BaseReward):
+    """Reward function which encourages the robot to move at the commanded speed."""
 
-    reward_name = 'lin_velocity_reward'
+    reward_name = 'lin_speed_reward'
 
     def calculate_reward(self) -> torch.Tensor:
+        """If the norm of the desired velocity is 0, then the reward is exp(-norm(v_act)^2)
+        If the dot product of the desired velocity and the actual velocity is greater than the norm of the desired velocity, then the reward is 1.
+        Otherwise, the reward is exp(-(dot(v_des, v_act) - norm(v_des))^2)
+
+        Returns:
+            torch.Tensor: Reward of shape (num_envs,)
+        """
+
         v_des = self.env.get_command_velocity()
         v_act = self.env.get_rb_velocity()[:, self.robot_config.base_index, :2]
 
@@ -47,6 +55,59 @@ class CommandVelocityReward(BaseReward):
         result[mask] = 1.0
 
         return result
+
+
+class CommandOrthoVelReward(BaseReward):
+    """Reward function which encourages the robot to move with the commanded velocity."""
+
+    reward_name = 'lin_ortho_vel_reward'
+
+    def calculate_reward(self) -> torch.Tensor:
+        """Reward is exp(-3 * norm(v_0)^2), where v_0 is v_act-(dot(v_des,v_act))*v_des.
+
+        Returns:
+            torch.Tensor: Reward of shape (num_envs,)
+        """
+
+        v_des = self.env.get_command_velocity()
+        v_act = self.env.get_rb_velocity()[:, self.robot_config.base_index, :2]
+
+        dot_v_des_v_act = torch.einsum('Bi,Bj->B', v_des, v_act)
+        v_0 = v_act - dot_v_des_v_act * v_des
+        v_0_sq = torch.einsum('Bi,Bi->B', v_0, v_0)
+
+        return torch.exp(-3 * v_0_sq)
+
+class AngVelReward(BaseReward):
+    """Reward which encourages the robot to move with the commanded angular velocity."""
+
+    reward_name = 'ang_vel_reward'
+
+    def calculate_reward(self) -> torch.Tensor:
+        """If the desired angular velocity is 0, then the reward is exp(-(w_act_yaw)^2).
+        If the dot product of the desired angular velocity and the actual angular velocity is greater than the desired angular velocity, then the reward is 1.
+        Otherwise, the reward is exp(-(dot(w_des, w_act) - w_des)^2)
+
+        Returns:
+            torch.Tensor: Reward of shape (num_envs,)
+        """
+
+        w_des = self.env.get_command_angular_velocity()
+        w_act = self.env.get_rb_velocity()[:, self.robot_config.base_index, 2]
+
+        w_des_norm = self.env.get_command_angular_velocity().norm(dim=1)
+        dots = torch.einsum('Bi,Bj->B', w_des, w_act)
+
+        result = torch.exp(-dots - w_des_norm**2)
+
+        mask = w_des_norm == 0.0
+        result[mask] = torch.exp(-w_act[mask]**2)
+
+        mask = dots > w_des_norm
+        result[mask] = 1.0
+
+        return result
+
 
 
 def lin_velocity(v_des: torch.Tensor, v_act: torch.Tensor, rewards: dict = None, scale: float = 1.0):
@@ -66,7 +127,7 @@ def lin_velocity(v_des: torch.Tensor, v_act: torch.Tensor, rewards: dict = None,
     """
     # we need the norm of v_des 3 times, so we calculate it once and store it
     # remove the last dimension of v_des_norm, since it is 1
-    v_des_norm = torch.norm(v_des, dim=1).squeeze()  # (num_envs,)
+    v_des_norm = torch.norm(v_des, dim=-1).squeeze()  # (num_envs,)
 
     # calculate the dot product of v_des and v_act across dim 1
     dot_v_des_v_act = torch.sum(v_des * v_act, dim=1)  # (num_envs,)
