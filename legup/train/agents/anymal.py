@@ -104,7 +104,7 @@ class AnymalAgent(BaseAgent):
         proprio[idx, :3] = torch.tensor([1., 0., 0.]).to(
             self.device)  # self.command[idx]
 
-        nan_logger.append(self.env.get_position())
+        nan_logger.append(self.env.get_position().clone())
 
         if len(nan_logger) > 5:
             nan_logger.pop(0)
@@ -113,7 +113,9 @@ class AnymalAgent(BaseAgent):
 
         if nan_envs.any():
             print("HISTORY OF NAN ENVS: VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV")
-            print(torch.stack(nan_logger)[:, nan_envs])
+            for nan_env_idx in nan_envs.argwhere():
+                print(f"NAN ENV HIST: {nan_env_idx}")
+                print(torch.stack(nan_logger)[:, nan_env_idx])
 
         proprio[idx, 3:6] = self.env.get_position()[idx]
         proprio[idx, 6:9] = self.env.get_linear_velocity()[idx]
