@@ -169,34 +169,9 @@ class GPUVecEnv(ConcurrentTrainingEnv):
 
 # Trains the agent using PPO from stable_baselines3. Tensorboard logging to './concurrent_training_tb' and saves model to ConcurrentTrainingEnv
 
-
-@hydra.main(config_path="config", config_name="config")
 def train_ppo(cfg: DictConfig):
 
     total_timesteps = cfg.env.parallel_envs * cfg.env.n_steps * cfg.env.n_epochs
-
-    
-    # reward_scales = {}
-    # reward_scales['velocity'] = 0.0
-    # reward_scales['body_motion'] = 0.0
-    # reward_scales['foot_clearance'] = 0.0
-    # reward_scales['shank_clearance'] = 0.0
-    # reward_scales['joint_velocity'] = 0.0
-    # reward_scales['joint_constraints'] = 0.0
-    # reward_scales['target_smoothness'] = 0.0
-    # reward_scales['torque'] = 0.0
-    # reward_scales['slip'] = 0.0
-    # reward_scales['shank_knee_col'] = 0.0
-
-    # train_cfg = {}
-    # train_cfg["max_tilt"] = 3*torch.pi/2
-    # train_cfg["max_torque"] = 90.0
-
-    # train_cfg['desired_linear_velocity'] = 1.0
-    # train_cfg['desired_angular_velocity'] = 0.0
-    # train_cfg['knee_threshold'] = 0.5#[0.5, 0.5, 0.5, 0.5]
-
-    # train_cfg['reward_scales'] = reward_scales
 
     root_path = os.path.dirname(os.path.abspath(__file__))
 
@@ -238,7 +213,7 @@ def train_ppo(cfg: DictConfig):
 # Runs the agent based on a saved model
 
 
-def eval_ppo():
+def eval_ppo(cfg: DictConfig):
     env = GPUVecEnv(
         1, f"{os.getcwd()}/robots/mini_cheetah/physical_models", "mini-cheetah.urdf")
     model = PPO.load('saved_models/503316480.zip')
@@ -250,6 +225,12 @@ def eval_ppo():
         cv2.imshow('training', env.render())
         cv2.waitKey(1)
 
+@hydra.main(config_path="config", config_name="config")
+def run(cfg: DictConfig):
+    if cfg.eval:
+        eval_ppo(cfg)
+    else:
+        train_ppo(cfg)
 
 if __name__ == '__main__':
 
@@ -262,8 +243,4 @@ if __name__ == '__main__':
 
     # args = parser.parse_args()
 
-    # if args.mode == 'train':
-    train_ppo()
-
-    # elif args.mode == 'eval':
-    #     eval_ppo()
+    run()

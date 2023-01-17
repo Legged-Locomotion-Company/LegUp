@@ -1,3 +1,5 @@
+eval: False
+
 defaults:
   - env: basic_env
   - agent: anymal_default
