@@ -152,6 +152,9 @@ def joint_constraint(q: torch.Tensor, q_th: Union[float, torch.Tensor]) -> torch
     Returns:
         torch.Tensor: the reward for each env of shape (num_envs,)
     """
+
+    q_th = torch.tensor(q_th).to(q.device).expand(q.shape)
+
     mask = q > q_th
     return torch.sum(-torch.pow(q-q_th, 2) * mask, dim=1)
 

@@ -40,18 +40,19 @@ class WildAnymalReward:
 
         v_act = self.env.get_linear_velocity()
         v_des = torch.zeros_like(v_act)
-        v_des[:, 0] = self.train_cfg["desired_linear_velocity"]
+        for i in range(3):
+            v_des[:, i] = self.train_cfg.command[i]
 
         w_act = self.env.get_angular_velocity()
         w_des = torch.zeros_like(w_act)
-        w_des[:] = self.train_cfg["desired_angular_velocity"]
+        w_des[:] = self.train_cfg.turn_command
 
         velocity_rewards = lin_velocity(v_des, v_act) + ang_velocity(
             w_des[:, 2], w_act[:, 2]) + linear_ortho_velocity(v_des, v_act)
 
-        reward = self.reward_scales['velocity'] * velocity_rewards
+        reward = self.reward_scales.velocity * velocity_rewards
 
-        reward += self.reward_scales['body_motion'] * \
+        reward += self.reward_scales.body_motion * \
             body_motion(v_act[:, 2], w_act[:, 0], w_act[:, 1])
 
         # is the foot height measured from the ground or from the body?
@@ -60,12 +61,12 @@ class WildAnymalReward:
         # get foot heights
         h = self.env.get_rb_position(
         )[:, self.robot_config.foot_indices, 2]
-        reward += self.reward_scales['foot_clearance'] * foot_clearance(h)
+        reward += self.reward_scales.foot_clearance * foot_clearance(h)
 
         # get positions of the shank and knee from config
         rigid_bodies = self.robot_config.shank_indices + self.robot_config.knee_indices
         contact_states = self.env.get_contact_states()[:, rigid_bodies]
-        reward += self.reward_scales['shank_knee_col'] * \
+        reward += self.reward_scales.shank_knee_col * \
             shank_or_knee_col(contact_states, curriculum_factor)
 
         # set joint velocities. If no joint history exists, set to zero
@@ -73,7 +74,7 @@ class WildAnymalReward:
         if previous_joint_velocities is None:
             previous_joint_velocities = torch.zeros_like(joint_velocities)
 
-        reward += self.reward_scales['joint_velocity'] * joint_motion(
+        reward += self.reward_scales.joint_velocities * joint_motion(
             joint_velocities, previous_joint_velocities, self.dt, curriculum_factor)
 
         # update previous joint velocities
@@ -83,7 +84,7 @@ class WildAnymalReward:
         joint_positions = self.env.get_joint_position()
         knee_joint_positions = joint_positions[:,
                                                self.robot_config.knee_indices]
-        reward += self.reward_scales['joint_constraints'] * \
+        reward += self.reward_scales.joint_constraints * \
             joint_constraint(knee_joint_positions, self.knee_threshold)
 
         # If no joint history exists (first iteration), set to zero
@@ -91,7 +92,7 @@ class WildAnymalReward:
             joint_target_t_1 = torch.zeros_like(joint_positions)
             joint_target_t_2 = torch.zeros_like(joint_positions)
 
-        reward += self.reward_scales['target_smoothness'] * target_smoothness(
+        reward += self.reward_scales.target_smoothness * target_smoothness(
             joint_positions, joint_target_t_1, joint_target_t_2, curriculum_factor)
 
         # update joint target history
@@ -100,7 +101,7 @@ class WildAnymalReward:
 
         # calculate torque reward
         torques = self.env.get_joint_torque()
-        reward += self.reward_scales['torque'] * \
+        reward += self.reward_scales.torque * \
             torque_reward(torques, curriculum_factor)
 
         # get what feet are in contact with the ground
@@ -111,7 +112,7 @@ class WildAnymalReward:
         feet_velocity = self.env.get_rb_linear_velocity(
         )[:, self.robot_config.foot_indices]
 
-        reward += self.reward_scales['slip'] * \
+        reward += self.reward_scales.slip * \
             slip(feet_contact, feet_velocity, curriculum_factor)
 
         return reward

@@ -22,6 +22,7 @@ class IsaacGymEnvironment:
             asset_path (str): path to URDF file from `asset_root`
             default_dof_pos (torch.Tensor): Joint positions to set for all robots when they are initialized or reset
         """
+
         self.ctx = SimulatorContext(
             num_environments, use_cuda, asset_root, asset_path)
         self.num_environments = num_environments

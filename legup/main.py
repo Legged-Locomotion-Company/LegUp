@@ -21,6 +21,8 @@ from wandb.integration.sb3 import WandbCallback
 import torch
 
 
+# root_path = 
+
 class CustomCallback(BaseCallback):
     """
     A custom callback that derives from ``BaseCallback``.
@@ -196,8 +198,10 @@ def train_ppo(cfg: DictConfig):
 
     # train_cfg['reward_scales'] = reward_scales
 
+    root_path = os.path.dirname(os.path.abspath(__file__))
+
     env = AnymalAgent(MiniCheetah, cfg.env.parallel_envs,
-                      f"{os.getcwd()}/robots/mini_cheetah/physical_models", "mini-cheetah.urdf", train_cfg=cfg.agent)
+                      f"{root_path}/robots/mini_cheetah/physical_models", "mini-cheetah.urdf", train_cfg=cfg.agent)
 
 
     cb = None
