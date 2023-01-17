@@ -23,25 +23,7 @@ RUN apt-get update \
     git-lfs \
     megatools
 
-# Force gcc 8 to avoid CUDA 10 build issues on newer base OS
-RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-8 8
-RUN update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-8 8
-
-WORKDIR /opt/leggedloco
-
-RUN megadl 'https://mega.co.nz/#!6f4jnDqB!b_z5kvu8yfmmRdvxfAbSgXa69QSAOcWlkiMCEFTxJ6M' \
-    && tar -xvzf IsaacGym_Preview_4_Package.tar.gz
-
-# WAR for eglReleaseThread shutdown crash in libEGL_mesa.so.0 (ensure it's never detected/loaded)
-# Can't remove package libegl-mesa0 directly (because of libegl1 which we need)
-RUN rm /usr/lib/x86_64-linux-gnu/libEGL_mesa.so.0 /usr/lib/x86_64-linux-gnu/libEGL_mesa.so.0.0.0 /usr/share/glvnd/egl_vendor.d/50_mesa.json
-
-RUN cp ./isaacgym/docker/nvidia_icd.json /usr/share/vulkan/icd.d/nvidia_icd.json
-RUN cp ./isaacgym/docker/10_nvidia.json /usr/share/glvnd/egl_vendor.d/10_nvidia.json
-
-RUN useradd --create-home legsuser
-
-# idk random stuff
+# Install python dependencies
 RUN pip install \
     opencv-python==4.5.4.60 \
     colorama \
@@ -59,6 +41,24 @@ RUN pip install \
     wandb \
     hydra-core \
     uuid
+
+# Force gcc 8 to avoid CUDA 10 build issues on newer base OS
+RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-8 8
+RUN update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-8 8
+
+WORKDIR /opt/leggedloco
+
+RUN megadl 'https://mega.co.nz/#!6f4jnDqB!b_z5kvu8yfmmRdvxfAbSgXa69QSAOcWlkiMCEFTxJ6M' \
+    && tar -xvzf IsaacGym_Preview_4_Package.tar.gz
+
+# WAR for eglReleaseThread shutdown crash in libEGL_mesa.so.0 (ensure it's never detected/loaded)
+# Can't remove package libegl-mesa0 directly (because of libegl1 which we need)
+RUN rm /usr/lib/x86_64-linux-gnu/libEGL_mesa.so.0 /usr/lib/x86_64-linux-gnu/libEGL_mesa.so.0.0.0 /usr/share/glvnd/egl_vendor.d/50_mesa.json
+
+RUN cp ./isaacgym/docker/nvidia_icd.json /usr/share/vulkan/icd.d/nvidia_icd.json
+RUN cp ./isaacgym/docker/10_nvidia.json /usr/share/glvnd/egl_vendor.d/10_nvidia.json
+
+RUN useradd --create-home legsuser
 
 # Copt legup repo to docker
 COPY . .

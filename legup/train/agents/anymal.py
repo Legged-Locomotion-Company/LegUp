@@ -101,6 +101,9 @@ class AnymalAgent(BaseAgent):
         proprio[idx, :3] = torch.tensor([1., 0., 0.]).to(
             self.device)  # self.command[idx]
 
+        if self.env.get_position()[idx].isnan().any():
+            print("Got a NAN in position!")
+
         proprio[idx, 3:6] = self.env.get_position()[idx]
         proprio[idx, 6:9] = self.env.get_linear_velocity()[idx]
 
@@ -165,6 +168,8 @@ class AnymalAgent(BaseAgent):
         # 0 = rb index of body
         is_collided = torch.any(self.env.get_contact_states()[:, [0, 2, 5, 8, 11]], dim=-1)
 
+        is_nan = self.env.get_position().isnan().any(dim=-1)
+
 #         # # Check if the robot is tilted too much
         # # is_tilted = torch.any(
             # torch.abs(self.env.get_rotation()) > self.train_cfg["max_tilt"], dim=-1)
@@ -174,4 +179,4 @@ class AnymalAgent(BaseAgent):
         #     torch.abs(self.env.get_joint_torque()) > self.train_cfg["max_torque"], dim=-1)
 
         # return (is_collided + is_tilted + is_exceeding_torque).bool()
-        return is_collided
+        return is_collided + is_nan
