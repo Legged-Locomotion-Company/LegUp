@@ -147,14 +147,15 @@ class BaseAgent(VecEnv):
             List[int]: idxs of environments that were reset
         """
 
-        done_idxs = []
+        done_idxs = np.array(self.term_idx, dtype=np.int32)
 
-        if len(self.term_idx) > 0:
+        if len(done_idxs) > 0:
             self.reset_envs(self.term_idx)
             self.env.reset(self.term_idx)
-            done_idxs += self.term_idx
 
-        dones = [idx in done_idxs for idx in range(self.num_envs)]
+        dones = np.zeros(self.num_envs, dtype=np.bool)
+
+        dones[done_idxs] = True
 
         self.term_idx.clear()
         return dones
