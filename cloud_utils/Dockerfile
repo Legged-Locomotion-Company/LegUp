@@ -57,7 +57,8 @@ RUN pip install \
     moviepy \
     imageio \
     wandb \
-    hydra-core
+    hydra-core \
+    uuid
 
 # Copt legup repo to docker
 COPY . .
@@ -79,4 +80,4 @@ RUN wandb login ab4474327941fce151a79358a59ee85a3377e660
 
 WORKDIR /opt/leggedloco/legup
 
-ENTRYPOINT ["python3", "main.py"]
+ENTRYPOINT ["python3", "main.py", "environment.headless=True"]
