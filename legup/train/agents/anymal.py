@@ -86,7 +86,7 @@ class AnymalAgent(BaseAgent):
         # privil[idx, 16:28] = self.env.get_contact_normals()
         # privil[idx, 28, 32] = self.enc.get_frivtion_coeffs()
         privil[idx, 32:40] = self.env.get_contact_states()[idx][
-            :, self.robot_cfg.shank_indices.extend(self.robot_cfg.thigh_indices)].to(torch.float)
+            :, self.robot_cfg.shank_indices + self.robot_cfg.thigh_indices].to(torch.float)
 
         # TODO: add airtime
 
@@ -107,7 +107,7 @@ class AnymalAgent(BaseAgent):
     def make_reward(self, actions: torch.Tensor) -> torch.Tensor:
         return self.reward_fn(self.joint_vel_history[:, :, 0],
                               self.joint_target_history[:, :, 0],
-                              self.joint_target_history[:, :, 1])
+                              self.joint_target_history[:, :, 1]).cpu()
 
     def reset_envs(self, envs):
         self.reset_history_vec(envs)
@@ -119,10 +119,10 @@ class AnymalAgent(BaseAgent):
 
         # Check if the robot is tilted too much
         is_tilted = torch.any(
-            torch.abs(self.env.get_orientation()) > self.train_cfg["max_tilt"], dim=-1)
+            torch.abs(self.env.get_rotation()) > self.train_cfg["max_tilt"], dim=-1)
 
         # Check if the robot's movements exceed the torque limits
         is_exceeding_torque = torch.any(
-            torch.abs(self.env.get_joint_torques()) > self.train_cfg["max_torque"], dim=-1)
+            torch.abs(self.env.get_joint_torque()) > self.train_cfg["max_torque"], dim=-1)
 
         return (is_collided + is_tilted + is_exceeding_torque).bool()

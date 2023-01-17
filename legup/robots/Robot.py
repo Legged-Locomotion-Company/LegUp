@@ -28,16 +28,16 @@ class Robot:
     # This should be a (NDOF) dimension tensor with joint positions for the robot at its home position
     home_position: torch.Tensor
 
-    # This one should be a tensor which contains the indices of all of the bodies which are feet and should be allowed to contact the ground
+    # This one should be a list which contains the indices of all of the bodies which are feet and should be allowed to contact the ground
     foot_indices: List[int]
 
-    # This one should be a tensor which contains the indices of all of the joints which are knees
+    # This one should be a list which contains the indices of all of the joints which are knees
     knee_indices: List[int]
 
-    # This one should be a tensor which contains the indices of all of links which immediately precede the knee links
+    # This one should be a list which contains the indices of all of links which immediately precede the knee links
     thigh_indices: List[int]
 
-    # This should be a tensor which contains the indices of all of the links which immediately follow knees. In quads sometimes this is the same as the feet
+    # This should be a list which contains the indices of all of the links which immediately follow knees. In quads sometimes this is the same as the feet
     shank_indeces: List[int]
 
     num_joints: int

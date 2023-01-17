@@ -167,13 +167,35 @@ class GPUVecEnv(ConcurrentTrainingEnv):
 
 @hydra.main(config_path="config", config_name="config")
 def train_ppo(cfg: DictConfig):
+    
     total_timesteps = cfg.env.parallel_envs * cfg.env.n_steps * cfg.env.n_epochs
 
-    # env = GPUVecEnv(
-    #     parallel_envs, f"{os.getcwd()}/robots/mini_cheetah/physical_models", "mini-cheetah.urdf")
+    
+    # reward_scales = {}
+    # reward_scales['velocity'] = 0.0
+    # reward_scales['body_motion'] = 0.0
+    # reward_scales['foot_clearance'] = 0.0
+    # reward_scales['shank_clearance'] = 0.0
+    # reward_scales['joint_velocity'] = 0.0
+    # reward_scales['joint_constraints'] = 0.0
+    # reward_scales['target_smoothness'] = 0.0
+    # reward_scales['torque'] = 0.0
+    # reward_scales['slip'] = 0.0
+    # reward_scales['shank_knee_col'] = 0.0
+
+    # train_cfg = {}
+    # train_cfg["max_tilt"] = 3*torch.pi/2
+    # train_cfg["max_torque"] = 90.0
+
+    # train_cfg['desired_linear_velocity'] = 1.0
+    # train_cfg['desired_angular_velocity'] = 0.0
+    # train_cfg['knee_threshold'] = 0.5#[0.5, 0.5, 0.5, 0.5]
+
+    # train_cfg['reward_scales'] = reward_scales
 
     env = AnymalAgent(MiniCheetah, cfg.env.parallel_envs,
                       f"{os.getcwd()}/robots/mini_cheetah/physical_models", "mini-cheetah.urdf", train_cfg=cfg.agent)
+
 
     cb = None
 
