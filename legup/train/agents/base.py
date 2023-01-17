@@ -46,7 +46,7 @@ class BaseAgent(VecEnv):
         # OpenAI Gym Environment required fields
         # TODO: custom observation space/action space bounds, this would help with clipping!
         self.observation_space = gym.spaces.Box(low=np.ones(
-            153) * -10000000, high=np.ones(153) * 10000000, dtype=np.float32)
+            391) * -10000000, high=np.ones(391) * 10000000, dtype=np.float32)
         self.action_space = gym.spaces.Box(low=np.ones(
             12) * -10000000, high=np.ones(12) * 10000000, dtype=np.float32)
         self.metadata = {"render_modes": ['rgb_array']}
@@ -146,12 +146,15 @@ class BaseAgent(VecEnv):
         Returns:
             List[int]: idxs of environments that were reset
         """
-        dones = []
+
+        done_idxs = []
 
         if len(self.term_idx) > 0:
             self.reset_envs(self.term_idx)
             self.env.reset(self.term_idx)
-            dones += self.term_idx
+            done_idxs += self.term_idx
+
+        dones = [idx in done_idxs for idx in range(self.num_envs)]
 
         self.term_idx.clear()
         return dones

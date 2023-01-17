@@ -238,7 +238,7 @@ class IsaacGymEnvironment:
 
         if actions is not None:
             if isinstance(actions, np.ndarray):
-                actions = torch.from_numpy(actions)
+                actions = torch.from_numpy(actions).to(self.device)
             if isinstance(actions, torch.Tensor):
                 actions = gymtorch.unwrap_tensor(actions)
         else:

@@ -107,7 +107,7 @@ class AnymalAgent(BaseAgent):
     def make_reward(self, actions: torch.Tensor) -> torch.Tensor:
         return self.reward_fn(self.joint_vel_history[:, :, 0],
                               self.joint_target_history[:, :, 0],
-                              self.joint_target_history[:, :, 1])
+                              self.joint_target_history[:, :, 1]).cpu()
 
     def reset_envs(self, envs):
         self.reset_history_vec(envs)
