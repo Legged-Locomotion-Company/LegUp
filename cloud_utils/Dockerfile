@@ -57,7 +57,7 @@ RUN pip install \
     moviepy \
     imageio \
     wandb \
-    hydra
+    hydra-core
 
 # Copt legup repo to docker
 COPY . .
