@@ -12,6 +12,9 @@ import gym
 import torch
 
 
+# TODO GET RID OF NAN LOGGING WHEN NANS ARE GONE
+nan_logger = []
+
 class AnymalAgent(BaseAgent):
     """Specific agent implementation for https://leggedrobotics.github.io/rl-perceptiveloco/assets/pdf/wild_anymal.pdf
     """
@@ -101,8 +104,16 @@ class AnymalAgent(BaseAgent):
         proprio[idx, :3] = torch.tensor([1., 0., 0.]).to(
             self.device)  # self.command[idx]
 
-        if self.env.get_position()[idx].isnan().any():
-            print("Got a NAN in position!")
+        nan_logger.append(self.env.get_position())
+
+        if len(nan_logger) > 5:
+            nan_logger.pop(0)
+
+        nan_envs = self.env.get_position()[idx].isnan().any(dim=1)
+
+        if nan_envs.any():
+            print("HISTORY OF NAN ENVS: VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV")
+            print(torch.stack(nan_logger)[:, nan_envs])
 
         proprio[idx, 3:6] = self.env.get_position()[idx]
         proprio[idx, 6:9] = self.env.get_linear_velocity()[idx]
