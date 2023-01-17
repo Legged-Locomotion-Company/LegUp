@@ -6,7 +6,6 @@ from legup.train.agents.anymal import AnymalAgent
 from legup.train.agents.concurrent_training import ConcurrentTrainingEnv
 from legup.train.models.anymal.teacher import CustomTeacherActorCriticPolicy
 
-import argparse
 import cv2
 import hydra
 import numpy as np
@@ -233,14 +232,4 @@ def run(cfg: DictConfig):
         train_ppo(cfg)
 
 if __name__ == '__main__':
-
-    parser = argparse.ArgumentParser(
-        prog='LegUp',
-        description='LegUp is a legged locomotion simulator and reinforcement learning framework.',
-        epilog='',)
-
-    parser.add_argument('mode', type=str, choices=['train', 'eval'])
-
-    # args = parser.parse_args()
-
     run()
