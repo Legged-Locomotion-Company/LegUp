@@ -203,6 +203,8 @@ class BaseAgent(VecEnv):
 
         # TODO: add specific reward information
         infos = [{}] * self.num_envs
+        # reward_keys.append('total_reward')
+        # reward_vals.append(sum(reward_vals))
         infos[0] = {'names': reward_keys, 'terms': reward_vals}
 
         return new_obs, reward, dones, infos

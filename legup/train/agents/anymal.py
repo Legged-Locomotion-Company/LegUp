@@ -7,6 +7,7 @@ from omegaconf import DictConfig
 from typing import List
 from typing import Tuple
 import numpy as np
+import gym
 
 import torch
 
@@ -37,6 +38,9 @@ class AnymalAgent(BaseAgent):
 
         self.reset_history_vec()
 
+        self.action_space = gym.spaces.Box(low=np.ones(
+            16) * -10000000, high=np.ones(16) * 10000000, dtype=np.float32)
+
     def reset_history_vec(self, idx=None):
         # 3 timesteps for history, 2 for velocity
 
@@ -62,7 +66,7 @@ class AnymalAgent(BaseAgent):
         phase_offsets = torch.tensor(
             [0, torch.pi, torch.pi, 0]).to(self.device)
 
-        phase = (self.ep_lens / self.dt).expand(4, self.num_envs).T * base_frequencies * torch.pi * 2
+        phase = (self.ep_lens * self.dt).expand(4, self.num_envs).T * base_frequencies * torch.pi * 2
         phase += phase_offsets.expand(phase.shape)
 
         return phase
@@ -92,6 +96,7 @@ class AnymalAgent(BaseAgent):
         privil = torch.zeros(self.num_envs, 50).to(self.device)
 
         # TODO: talk to rohan about the command
+        # ill work on this - Rohan
 
         proprio[idx, :3] = torch.tensor([1., 0., 0.]).to(
             self.device)  # self.command[idx]
@@ -136,7 +141,7 @@ class AnymalAgent(BaseAgent):
         return (torch.cat([proprio, extro, privil], dim=1)[idx]).cpu().numpy()
 
     def make_actions(self, actions: torch.Tensor) -> torch.Tensor:
-        # add kin here
+        actions = actions.clip(max=0.1, min=-0.1)
 
         if isinstance(actions, np.ndarray):
             actions = torch.tensor(actions).to(self.device)
@@ -158,14 +163,15 @@ class AnymalAgent(BaseAgent):
     def check_termination(self) -> torch.Tensor:
         # Check if any rigidbodies are hitting the ground
         # 0 = rb index of body
-        is_collided = torch.any(self.env.get_contact_states(), dim=-1)
+        is_collided = torch.any(self.env.get_contact_states()[:, [0, 2, 5, 8, 11]], dim=-1)
 
-        # Check if the robot is tilted too much
-        is_tilted = torch.any(
-            torch.abs(self.env.get_rotation()) > self.train_cfg["max_tilt"], dim=-1)
+#         # # Check if the robot is tilted too much
+        # # is_tilted = torch.any(
+            # torch.abs(self.env.get_rotation()) > self.train_cfg["max_tilt"], dim=-1)
 
-        # Check if the robot's movements exceed the torque limits
-        is_exceeding_torque = torch.any(
-            torch.abs(self.env.get_joint_torque()) > self.train_cfg["max_torque"], dim=-1)
+        # # # Check if the robot's movements exceed the torque limits
+        # # is_exceeding_torque = torch.any(
+        #     torch.abs(self.env.get_joint_torque()) > self.train_cfg["max_torque"], dim=-1)
 
-        return (is_collided + is_tilted + is_exceeding_torque).bool()
+        # return (is_collided + is_tilted + is_exceeding_torque).bool()
+        return is_collided

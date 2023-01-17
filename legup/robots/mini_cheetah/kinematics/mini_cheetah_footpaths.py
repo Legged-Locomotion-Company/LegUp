@@ -18,7 +18,15 @@ def walk_half_circle_line(q_vec, pos_phase_deltas, phases):
     """
 
     phase_offsets = torch.tensor([0, torch.pi, 0, torch.pi])
-    return use_gait_footpath(q_vec, pos_phase_deltas, phases, half_circle_line, phase_offsets)
+
+    pos_phase_deltas = torch.zeros_like(pos_phase_deltas)
+    result = use_gait_footpath(q_vec, pos_phase_deltas, phases, half_circle_line, phase_offsets)
+
+    # print("Phase!!!: ", phases)
+
+    # print("We are getting this back!!!!!: ", result)
+
+    return result
 
 
 def use_gait_footpath(q_vec, pos_phase_deltas, phase, path_func, phase_offsets):

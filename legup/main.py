@@ -22,7 +22,7 @@ from wandb.integration.sb3 import WandbCallback
 import torch
 
 
-# root_path = 
+# root_path =
 
 class CustomCallback(BaseCallback):
     """
@@ -101,8 +101,7 @@ class CustomCallback(BaseCallback):
 
 class CustomWandbCallback(WandbCallback):
     def __init__(self, env, verbose=1):
-        super().__init__(gradient_save_freq=100,
-                         model_save_path='saved_models', verbose=verbose)
+        super().__init__(model_save_path='saved_models', verbose=verbose)
         self.env_ = env
         self.video_buffer = []
 
@@ -170,15 +169,19 @@ class GPUVecEnv(AnymalAgent):
 
 # Trains the agent using PPO from stable_baselines3. Tensorboard logging to './concurrent_training_tb' and saves model to ConcurrentTrainingEnv
 
+
 def train_ppo(cfg: DictConfig):
 
-    total_timesteps = cfg.environment.parallel_envs * cfg.environment.n_steps * cfg.environment.n_epochs
+    total_timesteps = cfg.environment.parallel_envs * \
+        cfg.environment.n_steps * 1e6
 
-    root_path = os.path.dirname(os.path.abspath(__file__))
+    # os.path.dirname(os.path.abspath(__file__))
+    root_path = '/home/mishmish/Documents/LegUp/legup'
+
+    # print("POOOOP    ", root_path)
 
     env = AnymalAgent(MiniCheetah, cfg.environment.parallel_envs,
                       f"{root_path}/robots/mini_cheetah/physical_models", "mini-cheetah.urdf", train_cfg=cfg.agent)
-
 
     cb = None
 
@@ -226,12 +229,14 @@ def eval_ppo(cfg: DictConfig):
         cv2.imshow('training', env.render())
         cv2.waitKey(1)
 
+
 @hydra.main(config_path="config", config_name="config")
 def run(cfg: DictConfig):
     if cfg.eval:
         eval_ppo(cfg)
     else:
         train_ppo(cfg)
+
 
 if __name__ == '__main__':
     run()

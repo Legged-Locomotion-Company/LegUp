@@ -82,6 +82,8 @@ class Teacher(nn.Module):
         """
 
         encoded_data = self.split_and_encode_data(obs)
+        # x = self.forward_actor(encoded_data)
+        # y = self.forward_critic(encoded_data)
         return self.forward_actor(encoded_data), self.forward_critic(encoded_data)
 
     def split_and_encode_data(self, obs: torch.Tensor) -> torch.Tensor:
@@ -157,9 +159,9 @@ class Teacher(nn.Module):
 class CustomTeacherActorCriticPolicy(ActorCriticPolicy):
     def __init__(self, cfg, *args, **kwargs):
         """Custom policy that uses the Teacher network as the feature extractor."""
-        super().__init__(cfg, *args, **kwargs)
-        
         self.cfg = cfg
+        
+        super().__init__(cfg, *args, **kwargs)
 
     def _build_mlp_extractor(self) -> None:
         self.mlp_extractor = Teacher(self.cfg)

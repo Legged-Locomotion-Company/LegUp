@@ -137,4 +137,6 @@ class WildAnymalReward:
         # reward_log_keys_per_env = [[key for key in reward_log.keys()] for _ in range(self.env.num_environments)]
         # reward_log_values_per_env = [[value[i] for value in reward_log.values()] for i in range(self.env.num_environments)]
 
+        reward_log['total_reward'] = sum([t.mean() for t in reward_log.values()])
+
         return reward, reward_log.keys(), [t.mean() for t in reward_log.values()]
