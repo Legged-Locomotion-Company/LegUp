@@ -1,8 +1,7 @@
-import torch
-
 from kin_utils import *
-
 from inv_kin_algs import dls_invkin, pinv_invkin
+
+import torch
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 

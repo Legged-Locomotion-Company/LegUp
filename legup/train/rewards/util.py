@@ -1,6 +1,6 @@
-import torch
-
 from typing import Union, List, Tuple
+
+import torch
 
 class HistoryBuffer:
     """Buffer to store most recently updated data that is updated every few seconds"""

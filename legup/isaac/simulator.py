@@ -1,10 +1,10 @@
 from isaacgym import gymapi
 
 from typing import List
-
-import torch
 import numpy as np
 from scipy.spatial.transform import Rotation as R
+
+import torch
        
 class SimulatorContext:
     """Handles the creation of the simulation environment and adding agents"""

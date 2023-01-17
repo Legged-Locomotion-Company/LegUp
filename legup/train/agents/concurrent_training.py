@@ -1,13 +1,14 @@
+from isaacgym.torch_utils import *
+
 from legup.isaac.environment import IsaacGymEnvironment
 
 from typing import Union, List, Tuple
-
 import gym
-import torch
 import numpy as np
 import torchgeometry as tgm
-from isaacgym.torch_utils import *
 from stable_baselines3.common.vec_env import VecEnv
+
+import torch
 
 
 class HistoryBuffer:

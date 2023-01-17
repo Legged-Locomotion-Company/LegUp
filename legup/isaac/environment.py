@@ -1,13 +1,12 @@
 from isaacgym import gymapi, gymtorch
 
-from typing import List
-
-import torch
-import numpy as np
-import pytorch3d.transforms.rotation_conversions as R
-
 from legup.isaac.simulator import SimulatorContext
 
+from typing import List
+import numpy as np
+
+import torch
+import pytorch3d.transforms.rotation_conversions as R
 
 class IsaacGymEnvironment:
     """Interfaces with IsaacGym to handle all of the simulation, and provides an API to get simulation properties and move the robot.
@@ -23,6 +22,7 @@ class IsaacGymEnvironment:
             asset_path (str): path to URDF file from `asset_root`
             default_dof_pos (torch.Tensor): Joint positions to set for all robots when they are initialized or reset
         """
+
         self.ctx = SimulatorContext(
             num_environments, use_cuda, asset_root, asset_path)
         self.num_environments = num_environments
@@ -238,9 +238,10 @@ class IsaacGymEnvironment:
 
         if actions is not None:
             if isinstance(actions, np.ndarray):
-                actions = torch.from_numpy(actions)
+                actions = torch.from_numpy(actions).to(self.device)
             if isinstance(actions, torch.Tensor):
                 actions = gymtorch.unwrap_tensor(actions)
+            
         else:
             actions = gymtorch.unwrap_tensor(self.command_dof_pos)
 
@@ -271,7 +272,7 @@ class IsaacGymEnvironment:
             env_index = self.all_env_index[env_index]
 
         random_pos = torch.rand(len(env_index), 3) * 2
-        random_pos[:, 2] = 0.28
+        random_pos[:, 2] = 0.31
 
         # TODO: make faster for cuda?
         random_rot = torch.zeros(len(env_index), 3)

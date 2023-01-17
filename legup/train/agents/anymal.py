@@ -1,10 +1,15 @@
-from omegaconf import DictConfig
-import torch
-from typing import List
-
 from legup.train.agents.base import BaseAgent
 from legup.train.rewards.anymal_rewards import WildAnymalReward
 from legup.robots.Robot import Robot
+from legup.robots.mini_cheetah.kinematics.mini_cheetah_footpaths import walk_half_circle_line
+
+from omegaconf import DictConfig
+from typing import List
+from typing import Tuple
+import numpy as np
+import gym
+
+import torch
 
 
 class AnymalAgent(BaseAgent):
@@ -33,8 +38,12 @@ class AnymalAgent(BaseAgent):
 
         self.reset_history_vec()
 
+        self.action_space = gym.spaces.Box(low=np.ones(
+            16) * -10000000, high=np.ones(16) * 10000000, dtype=np.float32)
+
     def reset_history_vec(self, idx=None):
         # 3 timesteps for history, 2 for velocity
+
         if idx is not None:
             self.joint_pos_history[idx] = torch.zeros(
                 self.robot_cfg.num_joints, 3).to(self.device)
@@ -42,6 +51,7 @@ class AnymalAgent(BaseAgent):
                 self.robot_cfg.num_joints, 2).to(self.device)
             self.joint_target_history[idx] = torch.zeros(
                 self.robot_cfg.num_joints, 2).to(self.device)
+
         else:
             self.joint_pos_history = torch.zeros(
                 self.num_envs, self.robot_cfg.num_joints, 3).to(self.device)
@@ -49,6 +59,33 @@ class AnymalAgent(BaseAgent):
                 self.num_envs, self.robot_cfg.num_joints, 2).to(self.device)
             self.joint_target_history = torch.zeros(
                 self.num_envs, self.robot_cfg.num_joints, 2).to(self.device)
+
+    def phase_gen(self):
+        cpg_freq = 4.0
+        base_frequencies = torch.tensor([cpg_freq] * 4).to(self.device)
+        phase_offsets = torch.tensor(
+            [0, torch.pi, torch.pi, 0]).to(self.device)
+
+        phase = (self.ep_lens * self.dt).expand(4, self.num_envs).T * base_frequencies * torch.pi * 2
+        phase += phase_offsets.expand(phase.shape)
+
+        return phase
+
+    def make_phase_observation(self):
+        # Make some clever way to get the phase offsets, for now we just hardcode it
+        cpg_freq = 4.0
+
+        phase = self.phase_gen()
+
+        phase_cos = torch.cos(phase)
+        phase_sin = torch.sin(phase)
+
+        stacked = torch.cat([phase, phase_cos, phase_sin], dim=1)
+
+        cpg_freq_expanded = torch.tensor([cpg_freq]).to(
+            self.device).expand(self.ep_lens.shape)
+
+        return torch.cat([cpg_freq_expanded.unsqueeze(-1), stacked], dim=1)
 
     def make_observation(self, idx=None):
         if idx is None:
@@ -59,6 +96,7 @@ class AnymalAgent(BaseAgent):
         privil = torch.zeros(self.num_envs, 50).to(self.device)
 
         # TODO: talk to rohan about the command
+        # ill work on this - Rohan
 
         proprio[idx, :3] = torch.tensor([1., 0., 0.]).to(
             self.device)  # self.command[idx]
@@ -75,8 +113,7 @@ class AnymalAgent(BaseAgent):
         proprio[idx, 96:120] = self.joint_target_history[idx].flatten(
             start_dim=1)
 
-        # TODO: talk to misha about getting the CPG phase generation
-        # proprio[:, 120:133] = self.phase_gen(idx)
+        proprio[:, 120:133] = self.make_phase_observation()[idx]
 
         privil[idx, :4] = self.env.get_contact_states(
         )[idx][:, self.robot_cfg.foot_indices].to(torch.float)
@@ -84,9 +121,9 @@ class AnymalAgent(BaseAgent):
         privil[idx, 4:16] = self.env.get_contact_forces(
         )[idx][:, self.robot_cfg.foot_indices, :].flatten(start_dim=1)
         # privil[idx, 16:28] = self.env.get_contact_normals()
-        # privil[idx, 28, 32] = self.enc.get_frivtion_coeffs()
+        # privil[idx, 28:32] = self.enc.get_frivtion_coeffs()
         privil[idx, 32:40] = self.env.get_contact_states()[idx][
-            :, self.robot_cfg.shank_indices.extend(self.robot_cfg.thigh_indices)].to(torch.float)
+            :, self.robot_cfg.shank_indices + self.robot_cfg.thigh_indices].to(torch.float)
 
         # TODO: add airtime
 
@@ -103,11 +140,22 @@ class AnymalAgent(BaseAgent):
 
         return (torch.cat([proprio, extro, privil], dim=1)[idx]).cpu().numpy()
 
-    # TODO: talk to Rohan - Base class passes in actions, unecessary for this reward function
+    def make_actions(self, actions: torch.Tensor) -> torch.Tensor:
+        actions = actions.clip(max=0.1, min=-0.1)
+
+        if isinstance(actions, np.ndarray):
+            actions = torch.tensor(actions).to(self.device)
+
+        actions = walk_half_circle_line(self.env.get_joint_position(), actions, self.phase_gen())
+
+        return actions
+
     def make_reward(self, actions: torch.Tensor) -> torch.Tensor:
-        return self.reward_fn(self.joint_vel_history[:, :, 0],
-                              self.joint_target_history[:, :, 0],
-                              self.joint_target_history[:, :, 1])
+        total_reward, reward_keys, reward_vals = self.reward_fn(self.joint_vel_history[:, :, 0],
+                                                                self.joint_target_history[:, :, 0],
+                                                                self.joint_target_history[:, :, 1])
+
+        return total_reward.cpu(), reward_keys, reward_vals
 
     def reset_envs(self, envs):
         self.reset_history_vec(envs)
@@ -115,14 +163,15 @@ class AnymalAgent(BaseAgent):
     def check_termination(self) -> torch.Tensor:
         # Check if any rigidbodies are hitting the ground
         # 0 = rb index of body
-        is_collided = torch.any(self.env.get_contact_states(), dim=-1)
+        is_collided = torch.any(self.env.get_contact_states()[:, [0, 2, 5, 8, 11]], dim=-1)
 
-        # Check if the robot is tilted too much
-        is_tilted = torch.any(
-            torch.abs(self.env.get_orientation()) > self.train_cfg["max_tilt"], dim=-1)
+#         # # Check if the robot is tilted too much
+        # # is_tilted = torch.any(
+            # torch.abs(self.env.get_rotation()) > self.train_cfg["max_tilt"], dim=-1)
 
-        # Check if the robot's movements exceed the torque limits
-        is_exceeding_torque = torch.any(
-            torch.abs(self.env.get_joint_torques()) > self.train_cfg["max_torque"], dim=-1)
+        # # # Check if the robot's movements exceed the torque limits
+        # # is_exceeding_torque = torch.any(
+        #     torch.abs(self.env.get_joint_torque()) > self.train_cfg["max_torque"], dim=-1)
 
-        return (is_collided + is_tilted + is_exceeding_torque).bool()
+        # return (is_collided + is_tilted + is_exceeding_torque).bool()
+        return is_collided

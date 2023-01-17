@@ -141,3 +141,6 @@ Key_LegUp_Docker.pub
 # wandb logs
 legup/wandb/*
 legup/saved_models/*
+
+# hydra outputs
+legup/outputs/*

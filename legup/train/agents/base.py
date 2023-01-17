@@ -4,9 +4,10 @@ from legup.robots.Robot import Robot
 from typing import Union, List, Tuple
 
 import gym
-import torch
 import numpy as np
 from stable_baselines3.common.vec_env import VecEnv
+
+import torch
 
 
 class BaseAgent(VecEnv):
@@ -34,6 +35,8 @@ class BaseAgent(VecEnv):
         self.num_envs = num_environments
         self.term_idx = self.all_envs.copy()
 
+        self.ep_lens = torch.zeros(num_environments).to(self.device)
+
         self.env = IsaacGymEnvironment(
             num_environments, True, asset_path, asset_name, robot.home_position)
         self.robot = robot
@@ -44,7 +47,7 @@ class BaseAgent(VecEnv):
         # OpenAI Gym Environment required fields
         # TODO: custom observation space/action space bounds, this would help with clipping!
         self.observation_space = gym.spaces.Box(low=np.ones(
-            153) * -10000000, high=np.ones(153) * 10000000, dtype=np.float32)
+            391) * -10000000, high=np.ones(391) * 10000000, dtype=np.float32)
         self.action_space = gym.spaces.Box(low=np.ones(
             12) * -10000000, high=np.ones(12) * 10000000, dtype=np.float32)
         self.metadata = {"render_modes": ['rgb_array']}
@@ -144,12 +147,16 @@ class BaseAgent(VecEnv):
         Returns:
             List[int]: idxs of environments that were reset
         """
-        dones = []
 
-        if len(self.term_idx) > 0:
+        done_idxs = np.array(self.term_idx, dtype=np.int32)
+
+        if len(done_idxs) > 0:
             self.reset_envs(self.term_idx)
             self.env.reset(self.term_idx)
-            dones += self.term_idx
+
+        dones = np.zeros(self.num_envs, dtype=np.bool)
+
+        dones[done_idxs] = True
 
         self.term_idx.clear()
         return dones
@@ -188,14 +195,18 @@ class BaseAgent(VecEnv):
 
         # compute new observations and rewards
         new_obs = self.make_observation()
-        reward = self.make_reward(actions)
+        reward, reward_keys, reward_vals = self.make_reward(actions)
 
         # update tracking info (episodes done, terminated environments)
         self.ep_lens += 1
         self.term_idx = self.get_termination_list(reward)
 
         # TODO: add specific reward information
-        infos = [{} for _ in range(self.num_envs)]
+        infos = [{}] * self.num_envs
+        # reward_keys.append('total_reward')
+        # reward_vals.append(sum(reward_vals))
+        infos[0] = {'names': reward_keys, 'terms': reward_vals}
+
         return new_obs, reward, dones, infos
 
     def render(self) -> torch.Tensor:
