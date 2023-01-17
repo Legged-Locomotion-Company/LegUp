@@ -138,6 +138,9 @@ def use_ik(robot: Robot, q_vec, goals, ik_alg):
     per_foot_errors = ik_alg(
         jacobian[:, :, 3:].reshape(-1, 3, 3), error.reshape(-1, 3))
 
+    # overwriting the nan values with 0
+    torch.nan_to_num(per_foot_errors, out=per_foot_errors)
+
     return q_vec + per_foot_errors.reshape((-1, 12))
 
 
@@ -153,7 +156,7 @@ def mini_cheetah_dls_invkin(q_vec, goals):
     """
 
     from legup.robots.mini_cheetah.mini_cheetah import MiniCheetah
-    
+
     return use_ik(MiniCheetah, q_vec, goals, dls_invkin)
 
 
