@@ -1,7 +1,7 @@
-import torch
-
 from legup.robots.common.kinematics.kin_utils import *
 from legup.robots.common.kinematics.inv_kin_algs import dls_invkin, pinv_invkin
+
+import torch
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 

@@ -1,13 +1,13 @@
 import numpy as np
+from datetime import datetime
+import cv2
+
 import torch
 import torch.nn as nn
 import torch.distributions as distributions
 import torch.nn.functional as F
-from datetime import datetime
 from torch.utils.tensorboard import SummaryWriter
 
-import cv2
-import numpy as np
 
 def orthogonal_weight_init(m):
     if isinstance(m, nn.Linear):

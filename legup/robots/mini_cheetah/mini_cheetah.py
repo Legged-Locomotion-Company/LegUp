@@ -1,8 +1,7 @@
-import torch
-
 from legup.robots.Robot import Robot
 from legup.robots.mini_cheetah.kinematics.mini_cheetah_kin_torch import build_jacobian_and_fk_all_feet
 
+import torch
 
 class MiniCheetah(Robot):
     """This class respresents the mini_cheetah robot and stores information relevant to it

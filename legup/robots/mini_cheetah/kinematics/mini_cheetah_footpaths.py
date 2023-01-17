@@ -1,6 +1,6 @@
-import torch
-
 from legup.robots.mini_cheetah.kinematics.mini_cheetah_kin_torch import mini_cheetah_dls_invkin
+
+import torch
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 

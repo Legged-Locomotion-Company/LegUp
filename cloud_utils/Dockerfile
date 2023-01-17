@@ -56,7 +56,8 @@ RUN pip install \
     torchgeometry \
     moviepy \
     imageio \
-    wandb
+    wandb \
+    hydra
 
 # Copt legup repo to docker
 COPY . .

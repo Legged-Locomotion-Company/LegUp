@@ -4,9 +4,10 @@ from legup.robots.Robot import Robot
 from typing import Union, List, Tuple
 
 import gym
-import torch
 import numpy as np
 from stable_baselines3.common.vec_env import VecEnv
+
+import torch
 
 
 class BaseAgent(VecEnv):

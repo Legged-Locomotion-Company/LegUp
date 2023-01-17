@@ -1,3 +1,11 @@
+import isaac
+import isaacgym
+
+from legup.robots.mini_cheetah.mini_cheetah import MiniCheetah
+from legup.train.agents.anymal import AnymalAgent
+from legup.train.agents.concurrent_training import ConcurrentTrainingEnv
+from legup.train.models.anymal.teacher import CustomTeacherActorCriticPolicy
+
 import argparse
 import cv2
 import hydra
@@ -7,15 +15,10 @@ import os
 from stable_baselines3 import PPO
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.callbacks import BaseCallback
-import torch
 import wandb
 from wandb.integration.sb3 import WandbCallback
 
-
-from legup.robots.mini_cheetah.mini_cheetah import MiniCheetah
-from legup.train.agents.anymal import AnymalAgent
-from legup.train.agents.concurrent_training import ConcurrentTrainingEnv
-from legup.train.models.anymal.teacher import CustomTeacherActorCriticPolicy
+import torch
 
 
 class CustomCallback(BaseCallback):
@@ -167,7 +170,7 @@ class GPUVecEnv(ConcurrentTrainingEnv):
 
 @hydra.main(config_path="config", config_name="config")
 def train_ppo(cfg: DictConfig):
-    
+
     total_timesteps = cfg.env.parallel_envs * cfg.env.n_steps * cfg.env.n_epochs
 
     
@@ -246,9 +249,6 @@ def eval_ppo():
 
 if __name__ == '__main__':
 
-    def print_usage():
-        print('Valid usage is python3 main.py [train|eval] [headless|headful]')
-
     parser = argparse.ArgumentParser(
         prog='LegUp',
         description='LegUp is a legged locomotion simulator and reinforcement learning framework.',
@@ -256,13 +256,10 @@ if __name__ == '__main__':
 
     parser.add_argument('mode', type=str, choices=['train', 'eval'])
 
-    # add this functionality later
-    # parser.add_argument('-c', '--checkpoint', type=str, default=None)
+    # args = parser.parse_args()
 
-    args = parser.parse_args()
+    # if args.mode == 'train':
+    train_ppo()
 
-    if args.mode == 'train':
-        train_ppo()
-
-    elif args.mode == 'eval':
-        eval_ppo()
+    # elif args.mode == 'eval':
+    #     eval_ppo()

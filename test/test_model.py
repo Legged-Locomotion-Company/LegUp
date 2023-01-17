@@ -1,5 +1,6 @@
-import torch
 from legup.train.models.anymal.teacher import Teacher
+
+import torch
 
 
 def test_confirm_teacher_dimensions():

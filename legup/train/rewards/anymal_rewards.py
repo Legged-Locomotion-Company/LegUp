@@ -1,9 +1,8 @@
-from omegaconf import DictConfig
-import torch
-
 from legup.robots.Robot import Robot
 from legup.train.rewards.rewards import *
 
+from omegaconf import DictConfig
+import torch
 
 class WildAnymalReward:
     """

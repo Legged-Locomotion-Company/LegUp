@@ -1,7 +1,9 @@
 from legup.train.rewards.rewards import *
+
 from colorama import Fore, Back, Style
-import torch
 import pytest
+
+import torch
 
 # https://realpython.com/pytest-python-testing/
 

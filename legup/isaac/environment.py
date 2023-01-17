@@ -1,13 +1,12 @@
 from isaacgym import gymapi, gymtorch
 
-from typing import List
-
-import torch
-import numpy as np
-import pytorch3d.transforms.rotation_conversions as R
-
 from legup.isaac.simulator import SimulatorContext
 
+from typing import List
+import numpy as np
+
+import torch
+import pytorch3d.transforms.rotation_conversions as R
 
 class IsaacGymEnvironment:
     """Interfaces with IsaacGym to handle all of the simulation, and provides an API to get simulation properties and move the robot.

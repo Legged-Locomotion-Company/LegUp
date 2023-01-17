@@ -1,6 +1,9 @@
-import torch
+
 from legup.train.rewards.reward_helpers import squared_norm
+
 from typing import Union
+
+import torch
 
 """
 This file contains the reward functions for the agents.

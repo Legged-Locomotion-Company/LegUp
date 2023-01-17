@@ -1,10 +1,11 @@
-from omegaconf import DictConfig
-import torch
-from typing import List
-
 from legup.train.agents.base import BaseAgent
 from legup.train.rewards.anymal_rewards import WildAnymalReward
 from legup.robots.Robot import Robot
+
+from omegaconf import DictConfig
+from typing import List
+
+import torch
 
 
 class AnymalAgent(BaseAgent):
