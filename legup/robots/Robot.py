@@ -41,7 +41,6 @@ class Robot:
     shank_indeces: List[int]
 
     num_joints: int
-    
 
     def foot_positions(q: torch.Tensor) -> torch.Tensor:
         """Calculates the foot position for the robot

@@ -24,7 +24,7 @@ class WildAnymalReward:
         self.reward_scales = train_cfg['reward_scales']
 
         self.dt = dt
-        self.knee_threshold = train_cfg['knee_threshold']
+        self.knee_threshold = torch.Tensor(train_cfg['knee_threshold']).to(self.env.device)
 
         self.train_cfg = train_cfg
 
@@ -41,24 +41,24 @@ class WildAnymalReward:
         reward_log = {}
         reward = torch.zeros(self.env.num_environments).to(self.env.device)
 
-        v_act = self.env.get_linear_velocity()[:, :2]
-        v_des = torch.tensor([self.train_cfg.command[0], self.train_cfg.command[1]]).to(self.env.device).expand(v_act.shape)
+        v_act = self.env.get_linear_velocity()
+        v_des = torch.tensor([self.train_cfg.command[0], self.train_cfg.command[1]]).to(self.env.device).expand(v_act.shape[0], -1)
 
         w_act = self.env.get_angular_velocity()
         w_des = torch.zeros_like(w_act)
         w_des[:] = self.train_cfg.turn_command
 
-        velocity_rewards = lin_velocity(v_des, v_act) + ang_velocity(
-            w_des[:, 2], w_act[:, 2]) + linear_ortho_velocity(v_des, v_act) * self.reward_scales.velocity
+        velocity_rewards = lin_velocity(v_des, v_act[:, :2]) + ang_velocity(
+            w_des[:, 2], w_act[:, 2]) + linear_ortho_velocity(v_des, v_act[:, :2]) * self.reward_scales.velocity
 
         reward_log['lin_velocity_reward'] = velocity_rewards
         reward += velocity_rewards
 
-        body_motion = self.reward_scales.body_motion * \
+        body_motion_reward = self.reward_scales.body_motion * \
             body_motion(v_act[:, 2], w_act[:, 0], w_act[:, 1])
 
-        reward_log['body_motion_reward'] = body_motion
-        reward += body_motion
+        reward_log['body_motion_reward'] = body_motion_reward
+        reward += body_motion_reward
 
         # is the foot height measured from the ground or from the body?
         # currrent implimentation is that is is measured from the body, ie foot 0.2m above ground would produce a value of -0.2
@@ -114,11 +114,11 @@ class WildAnymalReward:
 
         # calculate torque reward
         torques = self.env.get_joint_torque()
-        torque_reward = self.reward_scales.torque * \
+        torque_reward_val = self.reward_scales.torque * \
             torque_reward(torques, curriculum_factor)
 
-        reward_log['torque_reward'] = torque_reward
-        reward += torque_reward
+        reward_log['torque_reward'] = torque_reward_val
+        reward += torque_reward_val
 
         # get what feet are in contact with the ground
         feet_contact = self.env.get_contact_states(
@@ -134,4 +134,7 @@ class WildAnymalReward:
         reward_log['slip_reward'] = slip_reward
         reward += slip_reward
 
-        return reward, reward_log.keys(), reward_log.values()
+        # reward_log_keys_per_env = [[key for key in reward_log.keys()] for _ in range(self.env.num_environments)]
+        # reward_log_values_per_env = [[value[i] for value in reward_log.values()] for i in range(self.env.num_environments)]
+
+        return reward, reward_log.keys(), [t.mean() for t in reward_log.values()]

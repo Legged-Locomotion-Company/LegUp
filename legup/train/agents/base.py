@@ -195,14 +195,16 @@ class BaseAgent(VecEnv):
 
         # compute new observations and rewards
         new_obs = self.make_observation()
-        reward = self.make_reward(actions)
+        reward, reward_keys, reward_vals = self.make_reward(actions)
 
         # update tracking info (episodes done, terminated environments)
         self.ep_lens += 1
         self.term_idx = self.get_termination_list(reward)
 
         # TODO: add specific reward information
-        infos = [{} for _ in range(self.num_envs)]
+        infos = [{}] * self.num_envs
+        infos[0] = {'names': reward_keys, 'terms': reward_vals}
+
         return new_obs, reward, dones, infos
 
     def render(self) -> torch.Tensor:

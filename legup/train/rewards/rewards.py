@@ -78,6 +78,7 @@ class CommandOrthoVelReward(BaseReward):
 
         return torch.exp(-3 * v_0_sq)
 
+
 class AngVelReward(BaseReward):
     """Reward which encourages the robot to move with the commanded angular velocity."""
 
@@ -109,8 +110,7 @@ class AngVelReward(BaseReward):
         return result
 
 
-
-def lin_velocity(v_des: torch.Tensor, v_act: torch.Tensor, rewards: dict = None, scale: float = 1.0):
+def lin_velocity(v_des: torch.Tensor, v_act: torch.Tensor, scale: float = 1.0):
     """If the norm of the desired velocity is 0, then the reward is exp(-norm(v_act)^2)
     If the dot product of the desired velocity and the actual velocity is greater than the norm of the desired velocity, then the reward is 1.
     Otherwise, the reward is exp(-(dot(v_des, v_act) - norm(v_des))^2)
@@ -129,24 +129,21 @@ def lin_velocity(v_des: torch.Tensor, v_act: torch.Tensor, rewards: dict = None,
     # remove the last dimension of v_des_norm, since it is 1
     v_des_norm = torch.norm(v_des, dim=-1).squeeze()  # (num_envs,)
 
-    # calculate the dot product of v_des and v_act across dim 1
-    dot_v_des_v_act = torch.sum(v_des * v_act, dim=1)  # (num_envs,)
+    dots = torch.einsum('Bi,Bj->B', v_des, v_act)
 
-    # use masks to select the correct reward function for a given env
-    x = torch.exp(squared_norm(v_act)) * (v_des_norm == 0)
-    x = 1 * (dot_v_des_v_act > v_des_norm)
-    x = torch.exp(-torch.pow(dot_v_des_v_act - v_des_norm, 2)) * \
-        ~((v_des_norm == 0) + dot_v_des_v_act > v_des_norm)
+    result = torch.exp(-dots - v_des_norm**2)
 
-    x *= scale
+    mask = v_des_norm == 0.0
+    result[mask] = torch.exp(-v_act.norm(dim=-1)[mask])
 
-    if rewards is not None:
-        rewards['lin_velocity_reward'] = x
+    mask = dots > v_des_norm
+    result[mask] = 1.0
 
-    return x
+    return result
 
 
-def ang_velocity(w_des_yaw, w_act_yaw, rewards: dict = None, scale: float = 1.0):
+
+def ang_velocity(w_des_yaw: torch.Tensor, w_act_yaw: torch.Tensor, scale: float = 1.0):
     """If the desired angular velocity is 0, then the reward is exp(-(w_act_yaw)^2).
     If the dot product of the desired angular velocity and the actual angular velocity is greater than the desired angular velocity, then the reward is 1.
     Otherwise, the reward is exp(-(dot(w_des_yaw,w_act_yaw) - w_des_yaw)^2)
@@ -161,26 +158,20 @@ def ang_velocity(w_des_yaw, w_act_yaw, rewards: dict = None, scale: float = 1.0)
         torch.Tensor: the reward for each env of shape (num_envs,)
     """
 
-    # elementwise multiplication since w_des_yaw and w_act_yaw are 1D
-    dot_w_des_w_act = w_des_yaw * w_act_yaw
+    dots = w_des_yaw * w_act_yaw
 
-    x = torch.exp(-torch.pow(dot_w_des_w_act - w_des_yaw, 2))
+    result = torch.exp(-dots - w_des_yaw**2)
 
-    # This is the case for when w_des_yaw is 0
-    x[w_des_yaw == 0] = torch.exp(-torch.pow(w_act_yaw, 2)) * (w_des_yaw == 0)
+    mask = w_des_yaw == 0.0
+    result[mask] = torch.exp(-w_act_yaw[mask]**2)
 
-    # This is the case for when dot_w_des_w_act > w_des_yaw
-    x[dot_w_des_w_act > w_des_yaw] = 1.0
+    mask = dots > w_des_yaw
+    result[mask] = 1.0
 
-    x *= scale
-
-    if rewards is not None:
-        rewards['ang_velocity_reward'] = x
-
-    return x
+    return result.squeeze()
 
 
-def linear_ortho_velocity(v_des: torch.Tensor, v_act: torch.Tensor, rewards: dict = None, scale: float = 1.0) -> torch.Tensor:
+def linear_ortho_velocity(v_des: torch.Tensor, v_act: torch.Tensor, scale: float = 1.0) -> torch.Tensor:
     """
     This term penalizes the velocity orthogonal to the target direction .
     Reward is exp(-3 * norm(v_0)^2), where v_0 is v_act-(dot(v_des,v_act))*v_des.
@@ -202,13 +193,10 @@ def linear_ortho_velocity(v_des: torch.Tensor, v_act: torch.Tensor, rewards: dic
 
     x *= scale
 
-    if rewards is not None:
-        rewards['lin_ortho_velocity_reward'] = x
-
     return x
 
 
-def body_motion(v_z: torch.Tensor, w_x: torch.Tensor, w_y: torch.Tensor, rewards: dict = None, scale: float = 1.0) -> torch.Tensor:
+def body_motion(v_z: torch.Tensor, w_x: torch.Tensor, w_y: torch.Tensor, scale: float = 1.0) -> torch.Tensor:
     """This term penalizes the body velocity in directions not part of the command\n
     Reward is -1.25*v_z^2 - 0.4 * abs(w_x) - 0.4 * abs(w_y)
 
@@ -227,13 +215,10 @@ def body_motion(v_z: torch.Tensor, w_x: torch.Tensor, w_y: torch.Tensor, rewards
 
     x *= scale
 
-    if rewards is not None:
-        rewards['body_motion_reward'] = x
-
-    return x
+    return x.squeeze()
 
 
-def foot_clearance(h: torch.Tensor, rewards: dict = None, scale: float = 1.0) -> torch.Tensor:
+def foot_clearance(h: torch.Tensor, scale: float = 1.0) -> torch.Tensor:
     """Penalizes the model if the foot is more than 0.2 meters above the ground, with a reward of -1 per foot that is not in compliance.
 
     Args:
@@ -244,17 +229,14 @@ def foot_clearance(h: torch.Tensor, rewards: dict = None, scale: float = 1.0) ->
     Returns:
         torch.Tensor: the reward for each env of shape (num_envs,)
     """
-    x = torch.sum(-1 * (h > 0.2), dim=1)
+    x = torch.sum(-1.0 * (h > 0.2), dim=1)
 
     x *= scale
-
-    if rewards is not None:
-        rewards['foot_clearance_reward'] = x
 
     return x
 
 
-def shank_or_knee_col(is_col: torch.Tensor, curriculum_factor: float, rewards: dict = None, scale: float = 1.0) -> torch.Tensor:
+def shank_or_knee_col(is_col: torch.Tensor, curriculum_factor: float, scale: float = 1.0) -> torch.Tensor:
     """If any of the shanks or knees are in contact with the ground, the reward is -curriculum_factor
 
     Args:
@@ -270,13 +252,10 @@ def shank_or_knee_col(is_col: torch.Tensor, curriculum_factor: float, rewards: d
 
     x *= scale
 
-    if rewards is not None:
-        rewards['shank_or_knee_col_reward'] = x
-
     return x
 
 
-def joint_motion(j_vel:  torch.Tensor, j_vel_t_1: torch.Tensor, dt: float, curriculum_factor: float, rewards: dict = None, scale: float = 1.0) -> torch.Tensor:
+def joint_motion(j_vel:  torch.Tensor, j_vel_t_1: torch.Tensor, dt: float, curriculum_factor: float, scale: float = 1.0) -> torch.Tensor:
     """This term penalizes the joint velocity and acceleration to avoid vibrations
 
     Args:
@@ -295,13 +274,10 @@ def joint_motion(j_vel:  torch.Tensor, j_vel_t_1: torch.Tensor, dt: float, curri
 
     x *= scale
 
-    if rewards is not None:
-        rewards['joint_motion_reward'] = x
-
     return x
 
 
-def joint_constraint(q: torch.Tensor, q_th: Union[float, torch.Tensor], rewards: dict = None, scale: float = 1.0) -> torch.Tensor:
+def joint_constraint(q: torch.Tensor, q_th: Union[float, torch.Tensor], scale: float = 1.0) -> torch.Tensor:
     """This term penalizes the joint position if it is outside of the joint limits.
 
     Args:
@@ -314,20 +290,15 @@ def joint_constraint(q: torch.Tensor, q_th: Union[float, torch.Tensor], rewards:
         torch.Tensor: the reward for each env of shape (num_envs,)
     """
 
-    q_th = torch.tensor(q_th).to(q.device).expand(q.shape)
-
     mask = q > q_th
     x = torch.sum(-torch.pow(q-q_th, 2) * mask, dim=1)
 
     x *= scale
 
-    if rewards is not None:
-        rewards['joint_constraint_reward'] = x
-
     return x
 
 
-def target_smoothness(joint_target_t: torch.Tensor, joint_t_1_des: torch.Tensor, joint_t_2_des: torch.Tensor, curriculum_factor: float, rewards: dict = None, scale: float = 1.0) -> torch.Tensor:
+def target_smoothness(joint_target_t: torch.Tensor, joint_t_1_des: torch.Tensor, joint_t_2_des: torch.Tensor, curriculum_factor: float, scale: float = 1.0) -> torch.Tensor:
     """This term penalizes the smoothness of the target foot trajectories
 
     Args:
@@ -346,13 +317,10 @@ def target_smoothness(joint_target_t: torch.Tensor, joint_t_1_des: torch.Tensor,
 
     x *= scale
 
-    if rewards is not None:
-        rewards['target_smoothness_reward'] = x
-
     return x
 
 
-def torque_reward(tau: torch.Tensor, curriculum_factor: float, rewards: dict = None, scale: float = 1.0) -> torch.Tensor:
+def torque_reward(tau: torch.Tensor, curriculum_factor: float, scale: float = 1.0) -> torch.Tensor:
     """This term penalizes the torque to reduce energy consumption
 
     Args:
@@ -368,13 +336,10 @@ def torque_reward(tau: torch.Tensor, curriculum_factor: float, rewards: dict = N
 
     x *= scale
 
-    if rewards is not None:
-        rewards['torque_reward'] = x
-
     return x
 
 
-def slip(foot_is_in_contact: torch.Tensor, feet_vel: torch.Tensor, curriculum_factor: float, rewards: dict = None, scale: float = 1.0) -> torch.Tensor:
+def slip(foot_is_in_contact: torch.Tensor, feet_vel: torch.Tensor, curriculum_factor: float, scale: float = 1.0) -> torch.Tensor:
     """We penealize the foot velocity if the foot is in contact with the ground to reduce slippage
 
     Args:
@@ -392,8 +357,5 @@ def slip(foot_is_in_contact: torch.Tensor, feet_vel: torch.Tensor, curriculum_fa
         torch.sum((foot_is_in_contact * squared_norm(feet_vel)), dim=1)
 
     x *= scale
-
-    if rewards is not None:
-        rewards['slip_reward'] = x
 
     return x

@@ -6,6 +6,8 @@ from legup.train.agents.anymal import AnymalAgent
 from legup.train.agents.concurrent_training import ConcurrentTrainingEnv
 from legup.train.models.anymal.teacher import CustomTeacherActorCriticPolicy
 
+import uuid
+
 import cv2
 import hydra
 import numpy as np
@@ -150,7 +152,7 @@ class CustomWandbCallback(WandbCallback):
 
 
 # TODO: generalize it to not just the `ConcurrentTrainingEnv` environment
-class GPUVecEnv(ConcurrentTrainingEnv):
+class GPUVecEnv(AnymalAgent):
     def step(self, actions):
         actions = torch.from_numpy(actions).cuda()
 
@@ -185,7 +187,7 @@ def train_ppo(cfg: DictConfig):
     else:
         config = {
             "env_name": cfg.agent.env_name,
-            "parallel_envs": cfg.env.parallel_envs,
+            "parallel_envs": cfg.environment.parallel_envs,
             "n_steps": cfg.environment.n_steps,
             "n_epochs": cfg.environment.n_epochs,
             "batch_size": cfg.environment.batch_size,
@@ -202,12 +204,12 @@ def train_ppo(cfg: DictConfig):
 
         cb = CustomWandbCallback(env)
 
-    model = PPO(CustomTeacherActorCriticPolicy, env, tensorboard_log='./concurrent_training_tb', verbose=1, policy_kwargs={'net_arch': [512, 256, 64]},
+    model = PPO(CustomTeacherActorCriticPolicy, env, tensorboard_log='./concurrent_training_tb', verbose=1,
                 batch_size=cfg.environment.batch_size, n_steps=cfg.environment.n_steps, n_epochs=cfg.environment.n_epochs, ent_coef=cfg.environment.entropy_coef,
                 learning_rate=cfg.environment.learning_rate, clip_range=cfg.environment.clip_range, gae_lambda=cfg.environment.gae_lambda, gamma=cfg.environment.discount, vf_coef=cfg.environment.value_coef)
 
     model.learn(total_timesteps=total_timesteps, callback=cb)
-    model.save(model)
+    model.save(f'saved_models/{uuid.uuid4().int}')
 
 # Runs the agent based on a saved model
 
