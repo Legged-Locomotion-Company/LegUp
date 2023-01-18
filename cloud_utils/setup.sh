@@ -34,5 +34,3 @@ git clone https://AndrewMead10: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@github.c
 cd LegUp;
 pip install -e .;
 wandb login ab4474327941fce151a79358a59ee85a3377e660;
-
-
