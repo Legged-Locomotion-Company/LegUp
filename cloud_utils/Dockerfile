@@ -60,7 +60,7 @@ RUN cp ./isaacgym/docker/10_nvidia.json /usr/share/glvnd/egl_vendor.d/10_nvidia.
 
 RUN useradd --create-home legsuser
 
-# Copt legup repo to docker
+# Copy legup repo to docker
 COPY . .
 
 # copy gym repo to docker
