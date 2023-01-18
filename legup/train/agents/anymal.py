@@ -164,7 +164,7 @@ class AnymalAgent(BaseAgent):
 
             for i in range(5):
                 print(f'Printing observation from timestep {i}:')
-                print([round(i.item(), 4) for i in self.prev_obs.get(i)[nan_idx]])
+                print([round(val.item(), 4) for val in self.prev_obs.get(i)[nan_idx]])
                 print()
                 pass
 
