@@ -1,13 +1,14 @@
 from legup.robots.common.kinematics.kin_utils import *
 from legup.robots.common.kinematics.inv_kin_algs import dls_invkin, pinv_invkin
+from legup.robots.Robot import Robot
 
 import torch
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
-def get_home_position():
-    return torch.tensor([0, -0.8, 1.6, 0, -0.8, 1.6, 0, -0.8, 1.6, 0, -0.8, 1.6]).to(device)
+# def get_home_position():
+    # return torch.tensor([0, -0.8, 1.6, 0, -0.8, 1.6, 0, -0.8, 1.6, 0, -0.8, 1.6]).to(device)
 
 
 def build_jacobian_and_fk(q_vec, leg):
@@ -110,10 +111,11 @@ def build_jacobian_and_fk_all_feet(q_vec):
     return all_jacobs, all_positions
 
 
-def use_ik(q_vec, goals, ik_alg):
+def use_ik(robot: Robot, q_vec, goals, ik_alg):
     """This function unpacks the stacked up vectors into the feet for the ik function, and restacks them at the end.
 
     Args:
+        robot (Robot): the robot config for kinematics
         q_vec (torch.Tensor): a (NUM_ENVS x 12) vector which contains the joint positions of the robots joints.
         goals (torch.Tensor): a (NUM_ENVS x 12) vector which contains the goal (x,y,z) positions for the feet relative to their home position all stacked up in one vector.
         ik_alk ((torch.tensor, torch.tensor) -> torch.tensor)
@@ -129,12 +131,15 @@ def use_ik(q_vec, goals, ik_alg):
 
     jacobian, absolute_foot_pos = build_jacobian_and_fk_all_feet(q_vec)
     _, home_pos = build_jacobian_and_fk_all_feet(
-        get_home_position().reshape((1, -1)))
+        robot.home_position.reshape((1, -1)))
     relative_foot_pos = absolute_foot_pos - home_pos
     error = goals_per_foot - relative_foot_pos
 
     per_foot_errors = ik_alg(
         jacobian[:, :, 3:].reshape(-1, 3, 3), error.reshape(-1, 3))
+
+    # overwriting the nan values with 0
+    torch.nan_to_num(per_foot_errors, out=per_foot_errors)
 
     return q_vec + per_foot_errors.reshape((-1, 12))
 
@@ -150,7 +155,9 @@ def mini_cheetah_dls_invkin(q_vec, goals):
         torch.Tensor: returns a (NUM_ENVS x 12) vector which contains the new targets for each of the robot's joints
     """
 
-    return use_ik(q_vec, goals, dls_invkin)
+    from legup.robots.mini_cheetah.mini_cheetah import MiniCheetah
+
+    return use_ik(MiniCheetah, q_vec, goals, dls_invkin)
 
 
 def mini_cheetah_pinv_invkin(q_vec, goals):

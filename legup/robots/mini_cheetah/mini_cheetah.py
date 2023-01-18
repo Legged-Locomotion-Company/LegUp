@@ -13,7 +13,8 @@ class MiniCheetah(Robot):
     """
 
     home_position = torch.tensor(
-        [0, -0.8, 1.6, 0, -0.8, 1.6, 0, -0.8, 1.6, 0, -0.8, 1.6], device=Robot.device)
+        [0, -0.7, 1.0, 0, -0.7, 1.0, 0, -0.7, 1.0, 0, -0.7, 1.0], device=Robot.device)
+        # [0, -0.8, 1.6, 0, -0.8, 1.6, 0, -0.8, 1.6, 0, -0.8, 1.6], device=Robot.device)
 
     foot_indices = [3, 6, 9, 12]
 

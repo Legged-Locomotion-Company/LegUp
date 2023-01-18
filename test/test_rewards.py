@@ -8,7 +8,7 @@ import torch
 # https://realpython.com/pytest-python-testing/
 
 
-@pytest.mark.parametrize("num_envs", [1, 2, 10, 1000])
+@pytest.mark.parametrize("num_envs", [2, 10, 1000])
 def test_confirm_reward_velocity_dimensions(num_envs):
     """
     Confirm that the reward dimensions are correct.

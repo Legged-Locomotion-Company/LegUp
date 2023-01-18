@@ -241,6 +241,7 @@ class IsaacGymEnvironment:
                 actions = torch.from_numpy(actions).to(self.device)
             if isinstance(actions, torch.Tensor):
                 actions = gymtorch.unwrap_tensor(actions)
+            
         else:
             actions = gymtorch.unwrap_tensor(self.command_dof_pos)
 
@@ -271,7 +272,7 @@ class IsaacGymEnvironment:
             env_index = self.all_env_index[env_index]
 
         random_pos = torch.rand(len(env_index), 3) * 2
-        random_pos[:, 2] = 0.28
+        random_pos[:, 2] = 0.31
 
         # TODO: make faster for cuda?
         random_rot = torch.zeros(len(env_index), 3)

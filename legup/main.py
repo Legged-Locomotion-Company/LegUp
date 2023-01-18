@@ -6,6 +6,8 @@ from legup.train.agents.anymal import AnymalAgent
 from legup.train.agents.concurrent_training import ConcurrentTrainingEnv
 from legup.train.models.anymal.teacher import CustomTeacherActorCriticPolicy
 
+import uuid
+
 import cv2
 import hydra
 import numpy as np
@@ -20,7 +22,7 @@ from wandb.integration.sb3 import WandbCallback
 import torch
 
 
-# root_path = 
+root_path = None
 
 class CustomCallback(BaseCallback):
     """
@@ -99,8 +101,7 @@ class CustomCallback(BaseCallback):
 
 class CustomWandbCallback(WandbCallback):
     def __init__(self, env, verbose=1):
-        super().__init__(gradient_save_freq=100,
-                         model_save_path='saved_models', verbose=verbose)
+        super().__init__(model_save_path='saved_models', verbose=verbose)
         self.env_ = env
         self.video_buffer = []
 
@@ -150,7 +151,7 @@ class CustomWandbCallback(WandbCallback):
 
 
 # TODO: generalize it to not just the `ConcurrentTrainingEnv` environment
-class GPUVecEnv(ConcurrentTrainingEnv):
+class GPUVecEnv(AnymalAgent):
     def step(self, actions):
         actions = torch.from_numpy(actions).cuda()
 
@@ -168,46 +169,51 @@ class GPUVecEnv(ConcurrentTrainingEnv):
 
 # Trains the agent using PPO from stable_baselines3. Tensorboard logging to './concurrent_training_tb' and saves model to ConcurrentTrainingEnv
 
+
 def train_ppo(cfg: DictConfig):
 
-    total_timesteps = cfg.env.parallel_envs * cfg.env.n_steps * cfg.env.n_epochs
+    total_timesteps = cfg.environment.parallel_envs * \
+        cfg.environment.n_steps * 1e6
 
-    root_path = os.path.dirname(os.path.abspath(__file__))
+    # root_path = os.path.dirname(os.path.abspath(__file__))
+    # root_path = '/home/mishmish/Documents/LegUp/legup'
+    # root_path = '/opt/leggedloco/legup'
 
-    env = AnymalAgent(MiniCheetah, cfg.env.parallel_envs,
+    # print("POOOOP    ", root_path)
+
+    env = AnymalAgent(MiniCheetah, cfg.environment.parallel_envs,
                       f"{root_path}/robots/mini_cheetah/physical_models", "mini-cheetah.urdf", train_cfg=cfg.agent)
-
 
     cb = None
 
-    if (not cfg.env.headless):
+    if (not cfg.environment.headless):
         cb = CustomCallback(env)
     else:
         config = {
             "env_name": cfg.agent.env_name,
-            "parallel_envs": cfg.env.parallel_envs,
-            "n_steps": cfg.env.n_steps,
-            "n_epochs": cfg.env.n_epochs,
-            "batch_size": cfg.env.batch_size,
+            "parallel_envs": cfg.environment.parallel_envs,
+            "n_steps": cfg.environment.n_steps,
+            "n_epochs": cfg.environment.n_epochs,
+            "batch_size": cfg.environment.batch_size,
             "total_timesteps": total_timesteps,
-            "entropy_coef": cfg.env.entropy_coef,
-            "value_coef": cfg.env.value_coef,
-            "learning_rate": cfg.env.learning_rate,
-            "gae_lambda": cfg.env.gae_lambda,
-            "discount": cfg.env.discount,
-            "clip_range": cfg.env.clip_range,
+            "entropy_coef": cfg.environment.entropy_coef,
+            "value_coef": cfg.environment.value_coef,
+            "learning_rate": cfg.environment.learning_rate,
+            "gae_lambda": cfg.environment.gae_lambda,
+            "discount": cfg.environment.discount,
+            "clip_range": cfg.environment.clip_range,
         }
         wandb.init(project="LegUp", config=config, entity="legged-locomotion-company",
                    sync_tensorboard=True, monitor_gym=True, save_code=True)
 
         cb = CustomWandbCallback(env)
 
-    model = PPO(CustomTeacherActorCriticPolicy, env, tensorboard_log='./concurrent_training_tb', verbose=1, policy_kwargs={'net_arch': [512, 256, 64]},
-                batch_size=cfg.env.batch_size, n_steps=cfg.env.n_steps, n_epochs=cfg.env.n_epochs, ent_coef=cfg.env.entropy_coef,
-                learning_rate=cfg.env.learning_rate, clip_range=cfg.env.clip_range, gae_lambda=cfg.env.gae_lambda, gamma=cfg.env.discount, vf_coef=cfg.env.value_coef)
+    model = PPO(CustomTeacherActorCriticPolicy, env, tensorboard_log='./concurrent_training_tb', verbose=1,
+                batch_size=cfg.environment.batch_size, n_steps=cfg.environment.n_steps, n_epochs=cfg.environment.n_epochs, ent_coef=cfg.environment.entropy_coef,
+                learning_rate=cfg.environment.learning_rate, clip_range=cfg.environment.clip_range, gae_lambda=cfg.environment.gae_lambda, gamma=cfg.environment.discount, vf_coef=cfg.environment.value_coef)
 
     model.learn(total_timesteps=total_timesteps, callback=cb)
-    model.save(model)
+    model.save(f'saved_models/{uuid.uuid4().int}')
 
 # Runs the agent based on a saved model
 
@@ -224,6 +230,7 @@ def eval_ppo(cfg: DictConfig):
         cv2.imshow('training', env.render())
         cv2.waitKey(1)
 
+
 @hydra.main(config_path="config", config_name="config")
 def run(cfg: DictConfig):
     if cfg.eval:
@@ -231,5 +238,7 @@ def run(cfg: DictConfig):
     else:
         train_ppo(cfg)
 
+
 if __name__ == '__main__':
+    root_path = os.getcwd()
     run()

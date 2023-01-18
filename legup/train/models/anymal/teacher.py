@@ -30,7 +30,7 @@ class Teacher(nn.Module):
             nn.Linear(60, 24),
         )
 
-        self.priviligde_encoder = nn.Sequential(
+        self.privilege_encoder = nn.Sequential(
             nn.Linear(50, 64),
             nn.LeakyReLU(),
             nn.Dropout(0.1),
@@ -75,13 +75,15 @@ class Teacher(nn.Module):
 
         Args:
             obs (torch.Tensor): Observation vector of shape (num_envs, 391). 133 values for proprioception, 208 for height maps around each foot (52 per foot),
-            and 50 for the privilidged information. Proprioceptive data is not passed through an encoder.
+            and 50 for the privileged information. Proprioceptive data is not passed through an encoder.
 
         Returns:
             Tuple[torch.Tensor, torch.Tensor]: Outputs of the actor and critic networks of shape (num_envs, 16) and (num_envs, 1) respectively.
         """
 
         encoded_data = self.split_and_encode_data(obs)
+        # x = self.forward_actor(encoded_data)
+        # y = self.forward_critic(encoded_data)
         return self.forward_actor(encoded_data), self.forward_critic(encoded_data)
 
     def split_and_encode_data(self, obs: torch.Tensor) -> torch.Tensor:
@@ -89,7 +91,7 @@ class Teacher(nn.Module):
 
         Args:
             obs (torch.Tensor): Observation vector of shape (num_envs, 391). 133 values for proprioception, 208 for height maps around each foot (52 per foot),
-            and 50 for the privilidged information.
+            and 50 for the privileged information.
 
         Returns:
             torch.Tensor: Encoded observation vector of shape (num_envs, 253).
@@ -105,7 +107,7 @@ class Teacher(nn.Module):
 
         Args:
             heights (torch.Tensor): Heights of the terrain around each foot. Shape (num_envs, 208).
-            priv (torch.Tensor): Privilidged information of contact states and forces. Shape (num_envs, 50).
+            priv (torch.Tensor): Privileged information of contact states and forces. Shape (num_envs, 50).
             proprioception (torch.Tensor): Information the robot is able to sense about itself. Shape (num_envs, 133).
 
         Returns:
@@ -115,7 +117,7 @@ class Teacher(nn.Module):
         heights = heights.reshape(-1, 4, 52)
         heights = self.height_encoder(heights).flatten(start_dim=1)
 
-        all_priv = self.priviligde_encoder(priv)
+        all_priv = self.privilege_encoder(priv)
 
         return torch.cat((heights, all_priv, proprioception), dim=1)
 
@@ -158,7 +160,7 @@ class CustomTeacherActorCriticPolicy(ActorCriticPolicy):
     def __init__(self, cfg, *args, **kwargs):
         """Custom policy that uses the Teacher network as the feature extractor."""
         self.cfg = cfg
-
+        
         super().__init__(cfg, *args, **kwargs)
 
     def _build_mlp_extractor(self) -> None:

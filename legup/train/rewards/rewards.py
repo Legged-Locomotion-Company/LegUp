@@ -11,8 +11,107 @@ Currently implemented functions all come from the Wild Anymal paper https://legg
 """
 
 
-def lin_velocity(v_des: torch.Tensor, v_act: torch.Tensor):
-    """If the norm of the desired velocity is 0, then the reward is exp(-norm(v_act)^2)\n
+class BaseReward:
+    def __init__(self, env, robot_config, weight, dt):
+        self.env = env
+        self.robot_config = robot_config
+        self.weight = weight
+
+    def __call__(self, rewards: dict = None) -> torch.Tensor:
+        reward_value = self.calculate_reward() * self.weight
+
+        if rewards is not None:
+            rewards[type(self).reward_name] = reward_value
+
+        return reward_value
+
+
+class CommandSpeedReward(BaseReward):
+    """Reward function which encourages the robot to move at the commanded speed."""
+
+    reward_name = 'lin_speed_reward'
+
+    def calculate_reward(self) -> torch.Tensor:
+        """If the norm of the desired velocity is 0, then the reward is exp(-norm(v_act)^2)
+        If the dot product of the desired velocity and the actual velocity is greater than the norm of the desired velocity, then the reward is 1.
+        Otherwise, the reward is exp(-(dot(v_des, v_act) - norm(v_des))^2)
+
+        Returns:
+            torch.Tensor: Reward of shape (num_envs,)
+        """
+
+        v_des = self.env.get_command_velocity()
+        v_act = self.env.get_rb_velocity()[:, self.robot_config.base_index, :2]
+
+        v_des_norm = self.env.get_command_velocity().norm(dim=1)
+        dots = torch.einsum('Bi,Bj->B', v_des, v_act)
+
+        result = torch.exp(-dots - v_des_norm**2)
+
+        mask = v_des_norm == 0.0
+        result[mask] = torch.exp(-v_act.norm(dim=-1)[mask])
+
+        mask = dots > v_des_norm
+        result[mask] = 1.0
+
+        return result
+
+
+class CommandOrthoVelReward(BaseReward):
+    """Reward function which encourages the robot to move with the commanded velocity."""
+
+    reward_name = 'lin_ortho_vel_reward'
+
+    def calculate_reward(self) -> torch.Tensor:
+        """Reward is exp(-3 * norm(v_0)^2), where v_0 is v_act-(dot(v_des,v_act))*v_des.
+
+        Returns:
+            torch.Tensor: Reward of shape (num_envs,)
+        """
+
+        v_des = self.env.get_command_velocity()
+        v_act = self.env.get_rb_velocity()[:, self.robot_config.base_index, :2]
+
+        dot_v_des_v_act = torch.einsum('Bi,Bj->B', v_des, v_act)
+        v_0 = v_act - dot_v_des_v_act * v_des
+        v_0_sq = torch.einsum('Bi,Bi->B', v_0, v_0)
+
+        return torch.exp(-3 * v_0_sq)
+
+
+class AngVelReward(BaseReward):
+    """Reward which encourages the robot to move with the commanded angular velocity."""
+
+    reward_name = 'ang_vel_reward'
+
+    def calculate_reward(self) -> torch.Tensor:
+        """If the desired angular velocity is 0, then the reward is exp(-(w_act_yaw)^2).
+        If the dot product of the desired angular velocity and the actual angular velocity is greater than the desired angular velocity, then the reward is 1.
+        Otherwise, the reward is exp(-(dot(w_des, w_act) - w_des)^2)
+
+        Returns:
+            torch.Tensor: Reward of shape (num_envs,)
+        """
+
+        w_des = self.env.get_command_angular_velocity()
+        w_act = self.env.get_rb_velocity()[:, self.robot_config.base_index, 2]
+
+        w_des_norm = self.env.get_command_angular_velocity().norm(dim=1)
+        dots = torch.einsum('Bi,Bj->B', w_des, w_act)
+
+        result = torch.exp(-dots - w_des_norm**2)
+
+        mask = w_des_norm == 0.0
+        result[mask] = torch.exp(-w_act[mask]**2)
+
+        mask = dots > w_des_norm
+        result[mask] = 1.0
+
+        return result
+
+
+def lin_velocity(v_des: torch.Tensor, v_act: torch.Tensor, scale: float = 1.0):
+    """If the norm of the desired velocity is 0, then the reward is exp(-norm(v_act)^2)
     If the dot product of the desired velocity and the actual velocity is greater than the norm of the desired velocity, then the reward is 1.
     Otherwise, the reward is exp(-(dot(v_des, v_act) - norm(v_des))^2)
 
@@ -20,27 +119,31 @@ def lin_velocity(v_des: torch.Tensor, v_act: torch.Tensor):
     Args:
         v_des (torch.Tensor): Desired X,Y velocity of shape (num_envs, 2)
         v_act (torch.Tensor): Actual  X,Y velocity of shape (num_envs, 2)
+        rewards (dict, optional): Dictionary to store the reward. Defaults to None.
+        scale (float, optional): Scale the reward. Defaults to 1.0.
 
     Returns:
         torch.Tensor: the reward for each env of shape (num_envs,)
     """
     # we need the norm of v_des 3 times, so we calculate it once and store it
     # remove the last dimension of v_des_norm, since it is 1
-    v_des_norm = torch.norm(v_des, dim=1).squeeze()  # (num_envs,)
+    v_des_norm = torch.norm(v_des, dim=-1).squeeze()  # (num_envs,)
 
-    # calculate the dot product of v_des and v_act across dim 1
-    dot_v_des_v_act = torch.sum(v_des * v_act, dim=1)  # (num_envs,)
+    dots = torch.einsum('Bi,Bj->B', v_des, v_act)
 
-    # use masks to select the correct reward function for a given env
-    x = torch.exp(squared_norm(v_act)) * (v_des_norm == 0)
-    x = 1 * (dot_v_des_v_act > v_des_norm)
-    x = torch.exp(-torch.pow(dot_v_des_v_act - v_des_norm, 2)) * \
-        ~((v_des_norm == 0) + dot_v_des_v_act > v_des_norm)
+    result = torch.exp(-dots - v_des_norm**2)
 
-    return x
+    mask = v_des_norm == 0.0
+    result[mask] = torch.exp(-v_act.norm(dim=-1)[mask])
+
+    mask = dots > v_des_norm
+    result[mask] = 1.0
+
+    return result
 
 
-def ang_velocity(w_des_yaw, w_act_yaw):
+
+def ang_velocity(w_des_yaw: torch.Tensor, w_act_yaw: torch.Tensor, scale: float = 1.0):
     """If the desired angular velocity is 0, then the reward is exp(-(w_act_yaw)^2).
     If the dot product of the desired angular velocity and the actual angular velocity is greater than the desired angular velocity, then the reward is 1.
     Otherwise, the reward is exp(-(dot(w_des_yaw,w_act_yaw) - w_des_yaw)^2)
@@ -48,27 +151,27 @@ def ang_velocity(w_des_yaw, w_act_yaw):
     Args:
         w_des_yaw (torch.Tensor): Desired yaw velocity of shape (num_envs, 1)
         w_act_yaw (torch.Tensor): Actual yaw velocity of shape (num_envs, 1)
+        rewards (dict, optional): Dictionary to store the reward. Defaults to None.
+        scale (float, optional): Scale the reward. Defaults to 1.0.
 
     Returns:
         torch.Tensor: the reward for each env of shape (num_envs,)
     """
 
-    # elementwise multiplication since w_des_yaw and w_act_yaw are 1D
-    dot_w_des_w_act = w_des_yaw * w_act_yaw
+    dots = w_des_yaw * w_act_yaw
 
-    x = torch.exp(-torch.pow(dot_w_des_w_act - w_des_yaw, 2)) 
+    result = torch.exp(-dots - w_des_yaw**2)
 
-    # This is the case for when w_des_yaw is 0
-    x[w_des_yaw == 0] = torch.exp(-torch.pow(w_act_yaw, 2)) * (w_des_yaw == 0)
+    mask = w_des_yaw == 0.0
+    result[mask] = torch.exp(-w_act_yaw[mask]**2)
 
-    # This is the case for when dot_w_des_w_act > w_des_yaw
-    x[dot_w_des_w_act > w_des_yaw] = 1.0
-    
+    mask = dots > w_des_yaw
+    result[mask] = 1.0
 
-    return x
+    return result.squeeze()
 
 
-def linear_ortho_velocity(v_des: torch.Tensor, v_act: torch.Tensor) -> torch.Tensor:
+def linear_ortho_velocity(v_des: torch.Tensor, v_act: torch.Tensor, scale: float = 1.0) -> torch.Tensor:
     """
     This term penalizes the velocity orthogonal to the target direction .
     Reward is exp(-3 * norm(v_0)^2), where v_0 is v_act-(dot(v_des,v_act))*v_des.
@@ -76,6 +179,8 @@ def linear_ortho_velocity(v_des: torch.Tensor, v_act: torch.Tensor) -> torch.Ten
     Args:
         v_des (torch.Tensor): Desired X,Y,Z velocity of shape (num_envs, 3)
         v_act (torch.Tensor): Actual  X,Y,Z velocity of shape (num_envs, 3)
+        rewards (dict, optional): Dictionary to store the reward. Defaults to None.
+        scale (float, optional): Scale the reward. Defaults to 1.0.
 
     Returns:
         torch.Tensor: the reward for each env of shape (num_envs,)
@@ -83,10 +188,15 @@ def linear_ortho_velocity(v_des: torch.Tensor, v_act: torch.Tensor) -> torch.Ten
     dot_v_des_v_act = torch.sum(
         v_des * v_act, dim=1).unsqueeze(1)  # (num_envs,1)
     v_0 = v_act - dot_v_des_v_act * v_des  # (num_envs,3)
-    return torch.exp(-3 * squared_norm(v_0))
+
+    x = torch.exp(-3 * squared_norm(v_0))
+
+    x *= scale
+
+    return x
 
 
-def body_motion(v_z: torch.Tensor, w_x: torch.Tensor, w_y: torch.Tensor) -> torch.Tensor:
+def body_motion(v_z: torch.Tensor, w_x: torch.Tensor, w_y: torch.Tensor, scale: float = 1.0) -> torch.Tensor:
     """This term penalizes the body velocity in directions not part of the command\n
     Reward is -1.25*v_z^2 - 0.4 * abs(w_x) - 0.4 * abs(w_y)
 
@@ -94,39 +204,58 @@ def body_motion(v_z: torch.Tensor, w_x: torch.Tensor, w_y: torch.Tensor) -> torc
         v_z (torch.Tensor): Velocity in the z direction of shape (num_envs, 1)
         w_x (torch.Tensor): Current angular velocity in the x direction of shape (num_envs, 1)
         w_y (torch.Tensor): Current angular velocity in the y direction of shape (num_envs, 1)
+        rewards (dict, optional): Dictionary to store the reward. Defaults to None.
+        scale (float, optional): Scale the reward. Defaults to 1.0.
 
     Returns:
         torch.Tensor: the reward for each env of shape (num_envs,)
     """
-    return (-1.25*torch.pow(v_z, 2) - 0.4 * torch.abs(w_x) - 0.4 * torch.abs(w_y))
+
+    x = (-1.25*torch.pow(v_z, 2) - 0.4 * torch.abs(w_x) - 0.4 * torch.abs(w_y))
+
+    x *= scale
+
+    return x.squeeze()
 
 
-def foot_clearance(h: torch.Tensor) -> torch.Tensor:
+def foot_clearance(h: torch.Tensor, scale: float = 1.0) -> torch.Tensor:
     """Penalizes the model if the foot is more than 0.2 meters above the ground, with a reward of -1 per foot that is not in compliance.
 
     Args:
         h (torch.Tensor): Sampled heights around each foot of shape (num_envs, num_feet, num_heights_per_foot). 
+        rewards (dict, optional): Dictionary to store the reward. Defaults to None.
+        scale (float, optional): Scale the reward. Defaults to 1.0.
 
     Returns:
         torch.Tensor: the reward for each env of shape (num_envs,)
     """
-    return torch.sum(-1 * (h > 0.2), dim=1)
+    x = torch.sum(-1.0 * (h > 0.2), dim=1)
+
+    x *= scale
+
+    return x
 
 
-def shank_or_knee_col(is_col: torch.Tensor, curriculum_factor: float) -> torch.Tensor:
+def shank_or_knee_col(is_col: torch.Tensor, curriculum_factor: float, scale: float = 1.0) -> torch.Tensor:
     """If any of the shanks or knees are in contact with the ground, the reward is -curriculum_factor
 
     Args:
         is_col (torch.Tensor): tensor of shape (num_envs, num_shank_and_knee) indicating whether each shank or knee is in contact with the ground
         curriculum_factor (float): the curriculum factor that increases monotonically and converges to 1
+        rewards (dict, optional): Dictionary to store the reward. Defaults to None.
+        scale (float, optional): Scale the reward. Defaults to 1.0.
 
     Returns:
         torch.Tensor: the reward for each env of shape (num_envs,)
     """
-    return -curriculum_factor * torch.any(is_col, dim=1)
+    x = -curriculum_factor * torch.any(is_col, dim=1)
+
+    x *= scale
+
+    return x
 
 
-def joint_motion(j_vel:  torch.Tensor, j_vel_t_1: torch.Tensor, dt: float, curriculum_factor: float) -> torch.Tensor:
+def joint_motion(j_vel:  torch.Tensor, j_vel_t_1: torch.Tensor, dt: float, curriculum_factor: float, scale: float = 1.0) -> torch.Tensor:
     """This term penalizes the joint velocity and acceleration to avoid vibrations
 
     Args:
@@ -134,32 +263,42 @@ def joint_motion(j_vel:  torch.Tensor, j_vel_t_1: torch.Tensor, dt: float, curri
         j_vel_t_1 (torch.Tensor): Joint velocity at previous time step of shape (num_envs, num_joints)
         dt (float): change in time since previous time step
         curriculum_factor (float): the curriculum factor that increases monotonically and converges to 1
+        rewards (dict, optional): Dictionary to store the reward. Defaults to None.
+        scale (float, optional): Scale the reward. Defaults to 1.0.
 
     Returns:
         torch.Tensor: the reward for each env of shape (num_envs,)
     """
     accel = (j_vel - j_vel_t_1)/dt
-    return -curriculum_factor * torch.sum(0.01*(j_vel)**2 + accel**2, dim=1)
+    x = -curriculum_factor * torch.sum(0.01*(j_vel)**2 + accel**2, dim=1)
+
+    x *= scale
+
+    return x
 
 
-def joint_constraint(q: torch.Tensor, q_th: Union[float, torch.Tensor]) -> torch.Tensor:
+def joint_constraint(q: torch.Tensor, q_th: Union[float, torch.Tensor], scale: float = 1.0) -> torch.Tensor:
     """This term penalizes the joint position if it is outside of the joint limits.
 
     Args:
         q (torch.Tensor): Joint position of shape (num_envs, num_joints)
         q_th (float, torch.Tensor): Joint position threshold. Can be scalar, 1d (num_joints,) or 2d (num_envs, num_joints).
+        rewards (dict, optional): Dictionary to store the reward. Defaults to None.
+        scale (float, optional): Scale the reward. Defaults to 1.0.
 
     Returns:
         torch.Tensor: the reward for each env of shape (num_envs,)
     """
 
-    q_th = torch.tensor(q_th).to(q.device).expand(q.shape)
-
     mask = q > q_th
-    return torch.sum(-torch.pow(q-q_th, 2) * mask, dim=1)
+    x = torch.sum(-torch.pow(q-q_th, 2) * mask, dim=1)
+
+    x *= scale
+
+    return x
 
 
-def target_smoothness(joint_target_t: torch.Tensor, joint_t_1_des: torch.Tensor, joint_t_2_des: torch.Tensor, curriculum_factor: float) -> torch.Tensor:
+def target_smoothness(joint_target_t: torch.Tensor, joint_t_1_des: torch.Tensor, joint_t_2_des: torch.Tensor, curriculum_factor: float, scale: float = 1.0) -> torch.Tensor:
     """This term penalizes the smoothness of the target foot trajectories
 
     Args:
@@ -167,35 +306,56 @@ def target_smoothness(joint_target_t: torch.Tensor, joint_t_1_des: torch.Tensor,
         joint_t_1_des (torch.Tensor): Joint target position at previous time step of shape (num_envs, num_joints)
         joint_t_2_des (torch.Tensor): Joint target position two time steps ago of shape (num_envs, num_joints)
         curriculum_factor float: the curriculum factor that increases monotonically and converges to 1
+        rewards (dict, optional): Dictionary to store the reward. Defaults to None.
+        scale (float, optional): Scale the reward. Defaults to 1.0.
 
     Returns:
         torch.Tensor: the reward for each env of shape (num_envs,)
     """
-    return -curriculum_factor * torch.sum((joint_target_t - joint_t_1_des)**2 + (joint_target_t - 2*joint_t_1_des + joint_t_2_des)**2, dim=1)
+    x = -curriculum_factor * torch.sum((joint_target_t - joint_t_1_des)**2 + (
+        joint_target_t - 2*joint_t_1_des + joint_t_2_des)**2, dim=1)
+
+    x *= scale
+
+    return x
 
 
-def torque_reward(tau: torch.Tensor, curriculum_factor: float) -> torch.Tensor:
+def torque_reward(tau: torch.Tensor, curriculum_factor: float, scale: float = 1.0) -> torch.Tensor:
     """This term penalizes the torque to reduce energy consumption
 
     Args:
         tau (torch.Tensor): Joint torque of shape (num_envs, num_joints)
         curriculum_factor (float): the curriculum factor that increases monotonically and converges to 1
+        rewards (dict, optional): Dictionary to store the reward. Defaults to None.
+        scale (float, optional): Scale the reward. Defaults to 1.0.
 
     Returns:
         torch.Tensor: the reward for each env of shape (num_envs,)
     """
-    return -curriculum_factor * torch.sum(tau**2, dim=1)
+    x = -curriculum_factor * torch.sum(tau**2, dim=1)
+
+    x *= scale
+
+    return x
 
 
-def slip(foot_is_in_contact: torch.Tensor, feet_vel: torch.Tensor, curriculum_factor: float) -> torch.Tensor:
+def slip(foot_is_in_contact: torch.Tensor, feet_vel: torch.Tensor, curriculum_factor: float, scale: float = 1.0) -> torch.Tensor:
     """We penealize the foot velocity if the foot is in contact with the ground to reduce slippage
 
     Args:
         foot_is_in_contact (torch.Tensor): boolean tensor of shape (num_envs, num_feet) indicating whether each foot is in contact with the ground
         feet_vel (torch.Tensor): Foot velocity of shape (num_envs, num_feet, 3)
         curriculum_factor (float): the curriculum factor that increases monotonically and converges to 1
+        rewards (dict, optional): Dictionary to store the reward. Defaults to None.
+        scale (float, optional): Scale the reward. Defaults to 1.0.
 
     Returns:
         torch.Tensor: the reward for each env of shape (num_envs,)
     """
-    return -curriculum_factor * torch.sum((foot_is_in_contact * squared_norm(feet_vel)), dim=1)
+
+    x = -curriculum_factor * \
+        torch.sum((foot_is_in_contact * squared_norm(feet_vel)), dim=1)
+
+    x *= scale
+
+    return x

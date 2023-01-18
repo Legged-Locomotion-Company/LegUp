@@ -151,6 +151,7 @@ class BaseAgent(VecEnv):
         done_idxs = np.array(self.term_idx, dtype=np.int32)
 
         if len(done_idxs) > 0:
+            self.ep_lens[self.term_idx] = 0
             self.reset_envs(self.term_idx)
             self.env.reset(self.term_idx)
 
@@ -195,14 +196,18 @@ class BaseAgent(VecEnv):
 
         # compute new observations and rewards
         new_obs = self.make_observation()
-        reward = self.make_reward(actions)
+        reward, reward_keys, reward_vals = self.make_reward(actions)
 
         # update tracking info (episodes done, terminated environments)
         self.ep_lens += 1
         self.term_idx = self.get_termination_list(reward)
 
         # TODO: add specific reward information
-        infos = [{} for _ in range(self.num_envs)]
+        infos = [{}] * self.num_envs
+        # reward_keys.append('total_reward')
+        # reward_vals.append(sum(reward_vals))
+        infos[0] = {'names': reward_keys, 'terms': reward_vals}
+
         return new_obs, reward, dones, infos
 
     def render(self) -> torch.Tensor:
