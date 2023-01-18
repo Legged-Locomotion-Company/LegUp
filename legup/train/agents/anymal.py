@@ -160,13 +160,13 @@ class AnymalAgent(BaseAgent):
 
         if torch.any(torch.isnan(obs)):
             nan_idx = torch.unique(torch.argwhere(torch.isnan(obs))[:, 0])
-            print(f'FOUND NAN IN OBSERVATION {nan_idx}')
-
-            for i in range(5):
-                print(f'Printing observation from timestep {i}:')
-                print([round(val.item(), 4) for val in self.prev_obs.get(i)[nan_idx]])
-                print()
-                pass
+    
+            for j in nan_idx:
+                print(f'FOUND NAN IN OBSERVATION {j}')            
+                for i in range(5):
+                    print(f'Printing observation from timestep {i}:')
+                    print([round(val.item(), 4) for val in self.prev_obs.get(i)[j, :]])
+                    print()
 
 
 
