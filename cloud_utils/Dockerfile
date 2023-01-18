@@ -46,7 +46,7 @@ RUN pip install \
 RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-8 8
 RUN update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-8 8
 
-WORKDIR /opt/leggedloco
+WORKDIR /opt/LegUp
 
 RUN megadl 'https://mega.co.nz/#!6f4jnDqB!b_z5kvu8yfmmRdvxfAbSgXa69QSAOcWlkiMCEFTxJ6M' \
     && tar -xvzf IsaacGym_Preview_4_Package.tar.gz
@@ -64,7 +64,7 @@ RUN useradd --create-home legsuser
 COPY . .
 
 # copy gym repo to docker
-RUN chown -R legsuser:legsuser /opt/leggedloco
+RUN chown -R legsuser:legsuser /opt/LegUp
 
 USER legsuser
 
@@ -78,6 +78,6 @@ RUN pip install -q -e .
 
 RUN wandb login ab4474327941fce151a79358a59ee85a3377e660
 
-WORKDIR /opt/leggedloco/legup
+WORKDIR /opt/LegUp/legup
 
 ENTRYPOINT ["python3", "main.py", "environment.headless=True"]
