@@ -74,6 +74,8 @@ class AnymalAgent(BaseAgent):
         phase = (self.ep_lens * self.dt).expand(4, self.num_envs).T * base_frequencies * torch.pi * 2
         phase += phase_offsets.expand(phase.shape)
 
+        phase = phase % (2 * torch.pi)
+        
         return phase
 
     def make_phase_observation(self):
