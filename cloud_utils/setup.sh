@@ -33,4 +33,4 @@ cd ../..;
 git clone https://AndrewMead10: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@github.com/Legged-Locomotion-Company/LegUp;
 cd LegUp;
 pip install -e .;
-wandb login ab4474327941fce151a79358a59ee85a3377e660;
+wandb login aa97ba8812f4389ad4905d767febba2688c59671;
