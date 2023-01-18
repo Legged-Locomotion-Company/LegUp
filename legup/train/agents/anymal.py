@@ -214,10 +214,12 @@ class AnymalAgent(BaseAgent):
         return (torch.cat([proprio, extro, privil], dim=1)[idx]).cpu().numpy()
 
     def make_actions(self, actions: torch.Tensor) -> torch.Tensor:
-        actions = actions.clip(max=0.1, min=-0.1)
 
         if isinstance(actions, np.ndarray):
             actions = torch.tensor(actions).to(self.device)
+
+        actions[0:12] = actions[0:12].clip(max=0.2, min=-0.2)
+        actions[12:] = actions[12:].clip(max=torch.pi, min=-torch.pi)
 
         actions = walk_half_circle_line(self.env.get_joint_position(), actions, self.phase_gen())
 
