@@ -95,7 +95,7 @@ class CustomLocalCallback(create_custom_callback(BaseCallback)):
             verbose (int, optional): _description_. Defaults to 0.
         """
 
-        super.init(env, training_id, root_path, verbose)
+        super().__init__(env, training_id, root_path, verbose)
 
         BaseCallback.__init__(self, verbose)
         self.env_ = env
@@ -191,6 +191,6 @@ class CustomWandbCallback(create_custom_callback(WandbCallback)):
 
         self.model.save(os.path.join(self.model_save_path, str(self.num_timesteps)))
 
-        wandb.save(os.path.join(self.model_save_path, '*'), base_path='checkpoints')
+        wandb.save(os.path.join(self.model_save_path, '*'))#, base_path='checkpoints')
 
         self.video_buffer = []

@@ -24,6 +24,8 @@ def train_ppo(cfg: DictConfig, root_path: str):
 
     cb = None
 
+    wandb_wrapper = None
+
     if (not cfg.environment.headless):
         training_id = str(uuid.uuid4())
         cb = CustomLocalCallback(env, training_id, root_path)
@@ -64,7 +66,7 @@ def train_ppo(cfg: DictConfig, root_path: str):
 def run_training(model, total_timesteps, callback, cfg, id=None, wandb_wrapper=None, retry_count=0, resume=False):
 
     if resume:
-        if cfg.envirinment.headless and wandb_wrapper is not None:
+        if cfg.environment.headless and wandb_wrapper is not None:
             wandb_wrapper.recover()
         else:
             model.load(f'saved_models/{callback.training_id}')

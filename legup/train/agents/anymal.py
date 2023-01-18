@@ -12,9 +12,6 @@ import gym
 import torch
 
 
-# TODO GET RID OF NAN LOGGING WHEN NANS ARE GONE
-nan_logger = []
-
 class AnymalAgent(BaseAgent):
     """Specific agent implementation for https://leggedrobotics.github.io/rl-perceptiveloco/assets/pdf/wild_anymal.pdf
     """
@@ -147,19 +144,6 @@ class AnymalAgent(BaseAgent):
         proprio[idx, :3] = torch.tensor([1., 0., 0.]).to(
             self.device)  # self.command[idx]
 
-        # nan_logger.append(self.env.get_linear_velocity().clone())
-
-        # if len(nan_logger) > 5:
-        #     nan_logger.pop(0)
-
-        # nan_envs = self.env.get_linear_velocity()[idx].isnan().any(dim=1)
-
-        # if nan_envs.any():
-        #     print("HISTORY OF NAN ENVS: VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV")
-        #     for nan_env_idx in nan_envs.argwhere():
-        #         print(f"NAN ENV HIST: {nan_env_idx}")
-        #         print(torch.stack(nan_logger)[:, nan_env_idx])
-
         proprio[idx, 3:6] = self.env.get_position()[idx]
         proprio[idx, 6:9] = self.env.get_linear_velocity()[idx]
 
@@ -218,8 +202,8 @@ class AnymalAgent(BaseAgent):
         if isinstance(actions, np.ndarray):
             actions = torch.tensor(actions).to(self.device)
 
-        actions[0:12] = actions[0:12].clip(max=0.2, min=-0.2)
-        actions[12:] = actions[12:].clip(max=torch.pi, min=-torch.pi)
+        actions[0:12] = actions[0:12].clip(max=0.1, min=-0.1)
+        actions[12:] = actions[12:].clip(max=torch.pi/2, min=-torch.pi/2)
 
         actions = walk_half_circle_line(self.env.get_joint_position(), actions, self.phase_gen())
 
@@ -242,13 +226,13 @@ class AnymalAgent(BaseAgent):
 
         is_nan = self.env.get_position().isnan().any(dim=-1)
 
-#         # # Check if the robot is tilted too much
-        # # is_tilted = torch.any(
-            # torch.abs(self.env.get_rotation()) > self.train_cfg["max_tilt"], dim=-1)
+        # # Check if the robot is tilted too much
+        # is_tilted = torch.any(
+        #     torch.abs(self.env.get_rotation()) > self.train_cfg["max_tilt"], dim=-1)
 
         # # # Check if the robot's movements exceed the torque limits
-        # # is_exceeding_torque = torch.any(
-        #     torch.abs(self.env.get_joint_torque()) > self.train_cfg["max_torque"], dim=-1)
+        # is_exceeding_torque = torch.any(
+        # torch.abs(self.env.get_joint_torque()) > self.train_cfg["max_torque"], dim=-1)
 
         # return (is_collided + is_tilted + is_exceeding_torque).bool()
         return is_collided + is_nan
