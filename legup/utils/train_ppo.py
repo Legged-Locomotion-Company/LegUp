@@ -55,7 +55,7 @@ def train_ppo(cfg: DictConfig, root_path: str):
                 learning_rate=cfg.environment.learning_rate, clip_range=cfg.environment.clip_range, gae_lambda=cfg.environment.gae_lambda, gamma=cfg.environment.discount, vf_coef=cfg.environment.value_coef)
 
     run_training(model, total_timesteps, cfg=cfg, callback=cb,
-                 wandb_wrapper=wandb_wrapper, resume=False)
+                 wandb_wrapper=wandb_wrapper, resume=False, log_dump_func=env.dump_log)
 
     model.save(f'saved_models/{uuid.uuid4().int}')
 
@@ -63,7 +63,7 @@ def train_ppo(cfg: DictConfig, root_path: str):
         wandb_wrapper.finish()
 
 
-def run_training(model, total_timesteps, callback, cfg, id=None, wandb_wrapper=None, retry_count=0, resume=False):
+def run_training(model, total_timesteps, callback, cfg, id=None, wandb_wrapper=None, retry_count=0, resume=False, log_dump_func=None):
 
     if resume:
         if cfg.environment.headless and wandb_wrapper is not None:
@@ -97,7 +97,10 @@ def run_training(model, total_timesteps, callback, cfg, id=None, wandb_wrapper=N
         print(
             f"Caught exception #{new_retry_count} during training after {elapsed} seconds.")
         print(f"Exception: {e}")
+        if log_dump_func is not None:
+            print("Log dump:")
+            log_dump_func()
         print("Retrying training...")
 
         run_training(model, total_timesteps=total_timesteps, callback=callback, cfg=cfg,
-                     id=id, wandb_wrapper=wandb_wrapper, retry_count=new_retry_count, resume=True)
+                     id=id, wandb_wrapper=wandb_wrapper, retry_count=new_retry_count, resume=True, log_dump_func=log_dump_func)
