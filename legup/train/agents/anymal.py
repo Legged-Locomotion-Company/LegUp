@@ -98,7 +98,7 @@ class AnymalAgent(BaseAgent):
         interesting_idxs = torch.argwhere(torch.isnan(self.prev_obs.data))
 
         if interesting_idxs.shape[0] > 0:
-            interesting_idxs = self.prev_obs.data.abs().argmax().unsqueeze()
+            interesting_idxs = self.prev_obs.data.abs().argmax().unsqueeze(0)
 
         dump_idxs = interesting_idxs[:, 1].unique()
 
