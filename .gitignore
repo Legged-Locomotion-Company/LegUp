@@ -144,3 +144,8 @@ legup/saved_models/*
 
 # hydra outputs
 legup/outputs/*
+
+# isaacgym
+isaacgym/*
+IsaacGym_Preview_4_Package.tar.gz
+legup/onstart.sh
