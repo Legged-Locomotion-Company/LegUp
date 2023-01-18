@@ -94,6 +94,45 @@ class AnymalAgent(BaseAgent):
 
         return torch.cat([cpg_freq_expanded.unsqueeze(-1), stacked], dim=1)
 
+
+
+    def explain_observation(self, obs):
+        def round_list_nice(vec):
+            return [round(i.item(), 4) for i in vec]
+
+        proprio, privil = obs[:133], obs[341:391]
+
+        command = proprio[0:3]
+        pos = proprio[3:6]
+        linvel = proprio[6:9]
+        angvel = proprio[9:12]
+        jointpos = proprio[12:24]
+        jointvel = proprio[24:36]
+        jointposhist = proprio[36:72]
+        jointvelhist = proprio[72:96]
+        jointtarghist = proprio[96:120]
+        phaseobs = proprio[120:133]
+
+        feetcontacts = privil[:4]
+        feetcontactforces = privil[4:16]
+        shankthighcontacts = privil[32:40]
+
+        print(f'Command: {round_list_nice(command)}')
+        print(f'Position: {round_list_nice(pos)}')
+        print(f'Linear Velocity: {round_list_nice(linvel)}')
+        print(f'Angular Velocity: {round_list_nice(angvel)}')
+        print(f'Joint Pos: {round_list_nice(jointpos)}')
+        print(f'Joint Vel: {round_list_nice(jointvel)}')
+        print(f'Joint Pos Hist: {round_list_nice(jointposhist)}')
+        print(f'Joint Vel Hist: {round_list_nice(jointvelhist)}')
+        print(f'Joint Target Hist: {round_list_nice(jointtarghist)}')
+        print(f'Phase Observation: {round_list_nice(phaseobs)}')
+        print(f'Feet Contacts: {round_list_nice(feetcontacts)}')
+        print(f'Feet Contact Forces: {round_list_nice(feetcontactforces)}')
+        print(f'ShankThighContacts: {round_list_nice(shankthighcontacts)}')
+        print()
+        
+
     def make_observation(self, idx=None):
         if idx is None:
             idx = torch.arange(self.num_envs)
@@ -159,7 +198,6 @@ class AnymalAgent(BaseAgent):
             idx]
 
         obs = torch.cat([proprio, extro, privil], dim=1)
-
         if torch.any(torch.isnan(obs)):
             nan_idx = torch.unique(torch.argwhere(torch.isnan(obs))[:, 0])
     
@@ -167,12 +205,10 @@ class AnymalAgent(BaseAgent):
                 print(f'FOUND NAN IN OBSERVATION {j}')            
                 for i in range(5):
                     print(f'Printing observation from timestep {i}:')
-                    print([round(val.item(), 4) for val in self.prev_obs.get(i)[j, :]])
-                    print()
-
-
-
-
+                    self.explain_observation(self.prev_obs.get(i)[j, :])
+            
+                print('NAN OBSERVATION:')
+                self.explain_observation(obs[j])
         self.prev_obs.step(obs)
 
         return (torch.cat([proprio, extro, privil], dim=1)[idx]).cpu().numpy()
