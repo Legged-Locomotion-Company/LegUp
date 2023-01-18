@@ -134,7 +134,7 @@ def lin_velocity(v_des: torch.Tensor, v_act: torch.Tensor, scale: float = 1.0):
     result = torch.exp(-(dots - v_des_norm)**2)
 
     mask = v_des_norm == 0.0
-    result[mask] = torch.exp(-torch.norm('Bi,Bi->B', v_act, v_act)[mask])
+    result[mask] = torch.exp(-torch.einsum('Bi,Bi->B', v_act, v_act)[mask])
 
     mask = dots > v_des_norm
     result[mask] = 1.0
