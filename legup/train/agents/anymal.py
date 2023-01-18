@@ -2,7 +2,7 @@ from legup.train.agents.base import BaseAgent
 from legup.train.rewards.anymal_rewards import WildAnymalReward
 from legup.robots.Robot import Robot
 from legup.robots.mini_cheetah.kinematics.mini_cheetah_footpaths import walk_half_circle_line
-
+from legup.train.rewards.util import HistoryBuffer
 from omegaconf import DictConfig
 from typing import List
 from typing import Tuple
@@ -11,6 +11,9 @@ import gym
 
 import torch
 
+
+# TODO GET RID OF NAN LOGGING WHEN NANS ARE GONE
+nan_logger = []
 
 class AnymalAgent(BaseAgent):
     """Specific agent implementation for https://leggedrobotics.github.io/rl-perceptiveloco/assets/pdf/wild_anymal.pdf
@@ -37,6 +40,8 @@ class AnymalAgent(BaseAgent):
         self.train_cfg = train_cfg
 
         self.reset_history_vec()
+
+        self.prev_obs = HistoryBuffer(num_environments, self.dt, self.dt, 5, 133 + 208 + 50, self.device)
 
         self.action_space = gym.spaces.Box(low=np.ones(
             16) * -10000000, high=np.ones(16) * 10000000, dtype=np.float32)
@@ -69,6 +74,8 @@ class AnymalAgent(BaseAgent):
         phase = (self.ep_lens * self.dt).expand(4, self.num_envs).T * base_frequencies * torch.pi * 2
         phase += phase_offsets.expand(phase.shape)
 
+        phase = phase % (2 * torch.pi)
+        
         return phase
 
     def make_phase_observation(self):
@@ -87,6 +94,45 @@ class AnymalAgent(BaseAgent):
 
         return torch.cat([cpg_freq_expanded.unsqueeze(-1), stacked], dim=1)
 
+
+
+    def explain_observation(self, obs):
+        def round_list_nice(vec):
+            return [round(i.item(), 4) for i in vec]
+
+        proprio, privil = obs[:133], obs[341:391]
+
+        command = proprio[0:3]
+        pos = proprio[3:6]
+        linvel = proprio[6:9]
+        angvel = proprio[9:12]
+        jointpos = proprio[12:24]
+        jointvel = proprio[24:36]
+        jointposhist = proprio[36:72]
+        jointvelhist = proprio[72:96]
+        jointtarghist = proprio[96:120]
+        phaseobs = proprio[120:133]
+
+        feetcontacts = privil[:4]
+        feetcontactforces = privil[4:16]
+        shankthighcontacts = privil[32:40]
+
+        print(f'Command: {round_list_nice(command)}')
+        print(f'Position: {round_list_nice(pos)}')
+        print(f'Linear Velocity: {round_list_nice(linvel)}')
+        print(f'Angular Velocity: {round_list_nice(angvel)}')
+        print(f'Joint Pos: {round_list_nice(jointpos)}')
+        print(f'Joint Vel: {round_list_nice(jointvel)}')
+        print(f'Joint Pos Hist: {round_list_nice(jointposhist)}')
+        print(f'Joint Vel Hist: {round_list_nice(jointvelhist)}')
+        print(f'Joint Target Hist: {round_list_nice(jointtarghist)}')
+        print(f'Phase Observation: {round_list_nice(phaseobs)}')
+        print(f'Feet Contacts: {round_list_nice(feetcontacts)}')
+        print(f'Feet Contact Forces: {round_list_nice(feetcontactforces)}')
+        print(f'ShankThighContacts: {round_list_nice(shankthighcontacts)}')
+        print()
+        
+
     def make_observation(self, idx=None):
         if idx is None:
             idx = torch.arange(self.num_envs)
@@ -100,6 +146,19 @@ class AnymalAgent(BaseAgent):
 
         proprio[idx, :3] = torch.tensor([1., 0., 0.]).to(
             self.device)  # self.command[idx]
+
+        # nan_logger.append(self.env.get_linear_velocity().clone())
+
+        # if len(nan_logger) > 5:
+        #     nan_logger.pop(0)
+
+        # nan_envs = self.env.get_linear_velocity()[idx].isnan().any(dim=1)
+
+        # if nan_envs.any():
+        #     print("HISTORY OF NAN ENVS: VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV")
+        #     for nan_env_idx in nan_envs.argwhere():
+        #         print(f"NAN ENV HIST: {nan_env_idx}")
+        #         print(torch.stack(nan_logger)[:, nan_env_idx])
 
         proprio[idx, 3:6] = self.env.get_position()[idx]
         proprio[idx, 6:9] = self.env.get_linear_velocity()[idx]
@@ -138,6 +197,20 @@ class AnymalAgent(BaseAgent):
         self.joint_target_history[idx, :, 0] = self.env.get_joint_position()[
             idx]
 
+        obs = torch.cat([proprio, extro, privil], dim=1)
+        if torch.any(torch.isnan(obs)):
+            nan_idx = torch.unique(torch.argwhere(torch.isnan(obs))[:, 0])
+    
+            for j in nan_idx:
+                print(f'FOUND NAN IN OBSERVATION {j}')            
+                for i in range(5):
+                    print(f'Printing observation from timestep {i}:')
+                    self.explain_observation(self.prev_obs.get(i)[j, :])
+            
+                print('NAN OBSERVATION:')
+                self.explain_observation(obs[j])
+        self.prev_obs.step(obs)
+
         return (torch.cat([proprio, extro, privil], dim=1)[idx]).cpu().numpy()
 
     def make_actions(self, actions: torch.Tensor) -> torch.Tensor:
@@ -165,6 +238,8 @@ class AnymalAgent(BaseAgent):
         # 0 = rb index of body
         is_collided = torch.any(self.env.get_contact_states()[:, [0, 2, 5, 8, 11]], dim=-1)
 
+        is_nan = self.env.get_position().isnan().any(dim=-1)
+
 #         # # Check if the robot is tilted too much
         # # is_tilted = torch.any(
             # torch.abs(self.env.get_rotation()) > self.train_cfg["max_tilt"], dim=-1)
@@ -174,4 +249,4 @@ class AnymalAgent(BaseAgent):
         #     torch.abs(self.env.get_joint_torque()) > self.train_cfg["max_torque"], dim=-1)
 
         # return (is_collided + is_tilted + is_exceeding_torque).bool()
-        return is_collided
+        return is_collided + is_nan

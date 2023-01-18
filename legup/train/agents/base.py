@@ -151,6 +151,7 @@ class BaseAgent(VecEnv):
         done_idxs = np.array(self.term_idx, dtype=np.int32)
 
         if len(done_idxs) > 0:
+            self.ep_lens[self.term_idx] = 0
             self.reset_envs(self.term_idx)
             self.env.reset(self.term_idx)
 

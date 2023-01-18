@@ -22,7 +22,7 @@ from wandb.integration.sb3 import WandbCallback
 import torch
 
 
-# root_path =
+root_path = None
 
 class CustomCallback(BaseCallback):
     """
@@ -175,8 +175,9 @@ def train_ppo(cfg: DictConfig):
     total_timesteps = cfg.environment.parallel_envs * \
         cfg.environment.n_steps * 1e6
 
-    # os.path.dirname(os.path.abspath(__file__))
-    root_path = '/home/mishmish/Documents/LegUp/legup'
+    # root_path = os.path.dirname(os.path.abspath(__file__))
+    # root_path = '/home/mishmish/Documents/LegUp/legup'
+    # root_path = '/opt/leggedloco/legup'
 
     # print("POOOOP    ", root_path)
 
@@ -239,4 +240,5 @@ def run(cfg: DictConfig):
 
 
 if __name__ == '__main__':
+    root_path = os.getcwd()
     run()
