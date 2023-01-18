@@ -111,7 +111,7 @@ class SimulatorContext:
 
         pose = gymapi.Transform()
         identity_quat = R.identity().as_quat()
-        pose.p = gymapi.Vec3(0.0, 0.0, 0.35)  # TODO: figure out correct height
+        pose.p = gymapi.Vec3(0.0, 0.0, 0.40)  # TODO: figure out correct height
         pose.r = gymapi.Quat(*identity_quat)
 
         env_actor_handles = []
