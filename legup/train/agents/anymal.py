@@ -2,7 +2,7 @@ from legup.train.agents.base import BaseAgent
 from legup.train.rewards.anymal_rewards import WildAnymalReward
 from legup.robots.Robot import Robot
 from legup.robots.mini_cheetah.kinematics.mini_cheetah_footpaths import walk_half_circle_line
-
+from legup.train.rewards.util import HistoryBuffer
 from omegaconf import DictConfig
 from typing import List
 from typing import Tuple
@@ -40,6 +40,8 @@ class AnymalAgent(BaseAgent):
         self.train_cfg = train_cfg
 
         self.reset_history_vec()
+
+        self.prev_obs = HistoryBuffer(num_environments, self.dt, self.dt, 5, 133 + 208 + 50, self.device)
 
         self.action_space = gym.spaces.Box(low=np.ones(
             16) * -10000000, high=np.ones(16) * 10000000, dtype=np.float32)
@@ -104,18 +106,18 @@ class AnymalAgent(BaseAgent):
         proprio[idx, :3] = torch.tensor([1., 0., 0.]).to(
             self.device)  # self.command[idx]
 
-        nan_logger.append(self.env.get_position().clone())
+        # nan_logger.append(self.env.get_linear_velocity().clone())
 
-        if len(nan_logger) > 5:
-            nan_logger.pop(0)
+        # if len(nan_logger) > 5:
+        #     nan_logger.pop(0)
 
-        nan_envs = self.env.get_position()[idx].isnan().any(dim=1)
+        # nan_envs = self.env.get_linear_velocity()[idx].isnan().any(dim=1)
 
-        if nan_envs.any():
-            print("HISTORY OF NAN ENVS: VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV")
-            for nan_env_idx in nan_envs.argwhere():
-                print(f"NAN ENV HIST: {nan_env_idx}")
-                print(torch.stack(nan_logger)[:, nan_env_idx])
+        # if nan_envs.any():
+        #     print("HISTORY OF NAN ENVS: VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV")
+        #     for nan_env_idx in nan_envs.argwhere():
+        #         print(f"NAN ENV HIST: {nan_env_idx}")
+        #         print(torch.stack(nan_logger)[:, nan_env_idx])
 
         proprio[idx, 3:6] = self.env.get_position()[idx]
         proprio[idx, 6:9] = self.env.get_linear_velocity()[idx]
@@ -153,6 +155,23 @@ class AnymalAgent(BaseAgent):
                                   1] = self.joint_target_history[idx, :, 0]
         self.joint_target_history[idx, :, 0] = self.env.get_joint_position()[
             idx]
+
+        obs = torch.cat([proprio, extro, privil], dim=1)
+
+        if torch.any(torch.isnan(obs)):
+            nan_idx = torch.unique(torch.argwhere(torch.isnan(obs))[:, 0])
+            print(f'FOUND NAN IN OBSERVATION {nan_idx}')
+
+            for i in range(5):
+                print(f'Printing observation from timestep {i}:')
+                print([round(i.item(), 4) for i in self.prev_obs.get(i)[nan_idx]])
+                print()
+                pass
+
+
+
+
+        self.prev_obs.step(obs)
 
         return (torch.cat([proprio, extro, privil], dim=1)[idx]).cpu().numpy()
 

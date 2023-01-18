@@ -208,7 +208,7 @@ def train_ppo(cfg: DictConfig):
 
         cb = CustomWandbCallback(env)
 
-    model = PPO(CustomTeacherActorCriticPolicy, env, tensorboard_log='./concurrent_training_tb', verbose=1,
+    model = PPO(CustomTeacherActorCriticPolicy, env, verbose=1,
                 batch_size=cfg.environment.batch_size, n_steps=cfg.environment.n_steps, n_epochs=cfg.environment.n_epochs, ent_coef=cfg.environment.entropy_coef,
                 learning_rate=cfg.environment.learning_rate, clip_range=cfg.environment.clip_range, gae_lambda=cfg.environment.gae_lambda, gamma=cfg.environment.discount, vf_coef=cfg.environment.value_coef)
 
