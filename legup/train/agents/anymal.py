@@ -12,9 +12,6 @@ import gym
 import torch
 
 
-# TODO GET RID OF NAN LOGGING WHEN NANS ARE GONE
-nan_logger = []
-
 class AnymalAgent(BaseAgent):
     """Specific agent implementation for https://leggedrobotics.github.io/rl-perceptiveloco/assets/pdf/wild_anymal.pdf
     """
@@ -41,7 +38,8 @@ class AnymalAgent(BaseAgent):
 
         self.reset_history_vec()
 
-        self.prev_obs = HistoryBuffer(num_environments, self.dt, self.dt, 5, 133 + 208 + 50, self.device)
+        self.prev_obs = HistoryBuffer(
+            num_environments, self.dt, self.dt, 5, 133 + 208 + 50, self.device)
 
         self.action_space = gym.spaces.Box(low=np.ones(
             16) * -10000000, high=np.ones(16) * 10000000, dtype=np.float32)
@@ -71,11 +69,12 @@ class AnymalAgent(BaseAgent):
         phase_offsets = torch.tensor(
             [0, torch.pi, torch.pi, 0]).to(self.device)
 
-        phase = (self.ep_lens * self.dt).expand(4, self.num_envs).T * base_frequencies * torch.pi * 2
+        phase = (self.ep_lens * self.dt).expand(4, self.num_envs).T * \
+            base_frequencies * torch.pi * 2
         phase += phase_offsets.expand(phase.shape)
 
         phase = phase % (2 * torch.pi)
-        
+
         return phase
 
     def make_phase_observation(self):
@@ -94,7 +93,20 @@ class AnymalAgent(BaseAgent):
 
         return torch.cat([cpg_freq_expanded.unsqueeze(-1), stacked], dim=1)
 
+    def dump_log(self):
+        # check for nans
+        interesting_idxs = torch.argwhere(torch.isnan(self.prev_obs.data))
 
+        if interesting_idxs.shape[0] > 0:
+            interesting_idxs = self.prev_obs.data.abs().argmax().unsqueeze(0)
+
+        dump_idxs = interesting_idxs[:, 1].unique()
+
+        for j in dump_idxs:
+            # print(f'FOUND NAN IN OBSERVATION {j}')
+            for i in range(5):
+                print(f'Printing observation from timestep {i}:')
+                self.explain_observation(self.prev_obs.get(i)[j, :])
 
     def explain_observation(self, obs):
         def round_list_nice(vec):
@@ -131,7 +143,6 @@ class AnymalAgent(BaseAgent):
         print(f'Feet Contact Forces: {round_list_nice(feetcontactforces)}')
         print(f'ShankThighContacts: {round_list_nice(shankthighcontacts)}')
         print()
-        
 
     def make_observation(self, idx=None):
         if idx is None:
@@ -146,19 +157,6 @@ class AnymalAgent(BaseAgent):
 
         proprio[idx, :3] = torch.tensor([1., 0., 0.]).to(
             self.device)  # self.command[idx]
-
-        # nan_logger.append(self.env.get_linear_velocity().clone())
-
-        # if len(nan_logger) > 5:
-        #     nan_logger.pop(0)
-
-        # nan_envs = self.env.get_linear_velocity()[idx].isnan().any(dim=1)
-
-        # if nan_envs.any():
-        #     print("HISTORY OF NAN ENVS: VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV")
-        #     for nan_env_idx in nan_envs.argwhere():
-        #         print(f"NAN ENV HIST: {nan_env_idx}")
-        #         print(torch.stack(nan_logger)[:, nan_env_idx])
 
         proprio[idx, 3:6] = self.env.get_position()[idx]
         proprio[idx, 6:9] = self.env.get_linear_velocity()[idx]
@@ -198,28 +196,21 @@ class AnymalAgent(BaseAgent):
             idx]
 
         obs = torch.cat([proprio, extro, privil], dim=1)
-        if torch.any(torch.isnan(obs)):
-            nan_idx = torch.unique(torch.argwhere(torch.isnan(obs))[:, 0])
-    
-            for j in nan_idx:
-                print(f'FOUND NAN IN OBSERVATION {j}')            
-                for i in range(5):
-                    print(f'Printing observation from timestep {i}:')
-                    self.explain_observation(self.prev_obs.get(i)[j, :])
-            
-                print('NAN OBSERVATION:')
-                self.explain_observation(obs[j])
+
         self.prev_obs.step(obs)
 
         return (torch.cat([proprio, extro, privil], dim=1)[idx]).cpu().numpy()
 
     def make_actions(self, actions: torch.Tensor) -> torch.Tensor:
-        actions = actions.clip(max=0.1, min=-0.1)
 
         if isinstance(actions, np.ndarray):
             actions = torch.tensor(actions).to(self.device)
 
-        actions = walk_half_circle_line(self.env.get_joint_position(), actions, self.phase_gen())
+        actions[0:12] = actions[0:12].clip(max=self.train_cfg.pos_delta_clip, min=-self.train_cfg.pos_delta_clip)
+        actions[12:] = actions[12:].clip(max=self.train_cfg.phase_delta_clip, min=-self.train_cfg.phase_delta_clip)
+
+        actions = walk_half_circle_line(
+            self.env.get_joint_position(), actions, self.phase_gen())
 
         return actions
 
@@ -236,17 +227,18 @@ class AnymalAgent(BaseAgent):
     def check_termination(self) -> torch.Tensor:
         # Check if any rigidbodies are hitting the ground
         # 0 = rb index of body
-        is_collided = torch.any(self.env.get_contact_states()[:, [0, 2, 5, 8, 11]], dim=-1)
+        is_collided = torch.any(self.env.get_contact_states()[
+                                :, [0, 2, 5, 8, 11]], dim=-1)
 
         is_nan = self.env.get_position().isnan().any(dim=-1)
 
-#         # # Check if the robot is tilted too much
-        # # is_tilted = torch.any(
-            # torch.abs(self.env.get_rotation()) > self.train_cfg["max_tilt"], dim=-1)
+        # # Check if the robot is tilted too much
+        # is_tilted = torch.any(
+        #     torch.abs(self.env.get_rotation()) > self.train_cfg["max_tilt"], dim=-1)
 
         # # # Check if the robot's movements exceed the torque limits
-        # # is_exceeding_torque = torch.any(
-        #     torch.abs(self.env.get_joint_torque()) > self.train_cfg["max_torque"], dim=-1)
+        # is_exceeding_torque = torch.any(
+        # torch.abs(self.env.get_joint_torque()) > self.train_cfg["max_torque"], dim=-1)
 
         # return (is_collided + is_tilted + is_exceeding_torque).bool()
         return is_collided + is_nan
