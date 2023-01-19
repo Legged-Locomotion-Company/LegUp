@@ -8,7 +8,6 @@ from legup.utils.wandb_wrapper import WandBWrapper
 from legup.robots.mini_cheetah.mini_cheetah import MiniCheetah
 from legup.train.models.anymal.teacher import CustomTeacherActorCriticPolicy
 
-
 import cv2
 import hydra
 from omegaconf import DictConfig

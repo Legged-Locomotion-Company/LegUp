@@ -199,15 +199,6 @@ class AnymalAgent(BaseAgent):
 
         self.prev_obs.step(obs)
 
-        # self.dump_log()
-
-        # if torch.any(torch.isnan(obs)):
-        #     nan_idx = torch.unique(torch.argwhere(torch.isnan(obs))[:, 0])
-
-        #     print('NAN OBSERVATION:')
-        #     self.explain_observation(obs[j])
-
-
         return (torch.cat([proprio, extro, privil], dim=1)[idx]).cpu().numpy()
 
     def make_actions(self, actions: torch.Tensor) -> torch.Tensor:
