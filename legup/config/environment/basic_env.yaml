@@ -13,3 +13,5 @@ clip_range: 0.2
 verbose: 1
 # dt = 1/cfg.dt, since we cannot specify fractions in yaml
 dt: 60
+pos_delta_clip: 0.3
+phase_delta_clip: 3.14
