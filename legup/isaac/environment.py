@@ -228,7 +228,7 @@ class IsaacGymEnvironment:
         """
         return self.net_contact_forces
 
-    def step(self, actions: torch.Tensor = None, simulate = True):
+    def step(self, actions: torch.Tensor = None):
         """Moves robots using `actions`, steps the simulation forward, updates graphics, and refreshes state tensors
 
         Args:
@@ -247,8 +247,7 @@ class IsaacGymEnvironment:
 
         self.gym.set_dof_position_target_tensor(self.sim, actions)
 
-        if simulate:
-            self.gym.simulate(self.sim)
+        self.gym.simulate(self.sim)
         self.gym.fetch_results(self.sim, True)
         self.gym.step_graphics(self.sim)
         self.gym.render_all_camera_sensors(self.sim)
@@ -272,12 +271,12 @@ class IsaacGymEnvironment:
         else:
             env_index = self.all_env_index[env_index]
 
-        random_pos = torch.rand(len(env_index), 3) * 0 # 2
+        random_pos = torch.rand(len(env_index), 3) * 2
         random_pos[:, 2] = 0.38
 
         # TODO: make faster for cuda?
         random_rot = torch.zeros(len(env_index), 3)
-        random_rot[:, 0] = 0 # torch.deg2rad(torch.rand(len(env_index)) * 360)
+        random_rot[:, 0] = torch.deg2rad(torch.rand(len(env_index)) * 360)
         random_rot[:, 1] = 0
         random_rot[:, 2] = np.radians(180)
         random_rot = R.matrix_to_quaternion(
