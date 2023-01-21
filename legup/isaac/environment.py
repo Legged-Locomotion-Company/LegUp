@@ -55,7 +55,7 @@ class IsaacGymEnvironment:
         camera_props = gymapi.CameraProperties()
         camera_props.width = width
         camera_props.height = height
-        camera_props.use_collision_geometry = True
+        # camera_props.use_collision_geometry = True
         self.camera_handle = self.gym.create_camera_sensor(
             self.env_actor_handles[0][0], camera_props)
 

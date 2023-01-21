@@ -1,5 +1,5 @@
 # current defaults from Misha's WandB branch
-headless: False
+headless: True
 parallel_envs: 8192
 n_steps: 256
 n_epochs: 5
