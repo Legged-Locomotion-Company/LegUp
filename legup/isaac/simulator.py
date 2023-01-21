@@ -38,7 +38,7 @@ class SimulatorContext:
         """
         sim_params = gymapi.SimParams()
         sim_params.dt = 1. / 60.
-        sim_params.substeps = 16
+        sim_params.substeps = 2
         sim_params.up_axis = gymapi.UP_AXIS_Z
         sim_params.gravity = gymapi.Vec3(0.0, 0.0, -9.81)
         sim_params.use_gpu_pipeline = self.use_cuda
@@ -46,7 +46,7 @@ class SimulatorContext:
         sim_params.physx.use_gpu = self.use_cuda
         sim_params.physx.num_threads = 8
         sim_params.physx.solver_type = 1  # more robust, slightly more expensive
-        sim_params.physx.num_position_iterations = 16
+        sim_params.physx.num_position_iterations = 8
         sim_params.physx.num_velocity_iterations = 1
         sim_params.physx.contact_offset = 0.01
         sim_params.physx.rest_offset = 0.0

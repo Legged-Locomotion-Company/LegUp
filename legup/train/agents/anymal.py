@@ -230,7 +230,6 @@ class AnymalAgent(BaseAgent):
         is_collided = torch.any(self.env.get_contact_states()[
                                 :, [0, 2, 5, 8, 11]], dim=-1)
 
-        is_nan = self.env.get_position().isnan().any(dim=-1)
 
         # # Check if the robot is tilted too much
         # is_tilted = torch.any(
@@ -241,4 +240,4 @@ class AnymalAgent(BaseAgent):
         # torch.abs(self.env.get_joint_torque()) > self.train_cfg["max_torque"], dim=-1)
 
         # return (is_collided + is_tilted + is_exceeding_torque).bool()
-        return is_collided + is_nan
+        return is_collided

@@ -168,8 +168,9 @@ class BaseAgent(VecEnv):
         Returns:
             torch.Tensor: new observations after reset, shape `(num_envs, observation_space)`
         """
-        self.env.step(None)
+
         self.reset_partial()
+        self.env.step(None)
         self.env.refresh_buffers()
 
         return self.make_observation()
@@ -185,12 +186,12 @@ class BaseAgent(VecEnv):
             environments have terminated/truncated, and additional metadata (currently empty). Observation tensor has shape `(num_envs, observation_space)`
             and all other tensors have shape `(num_envs)`
         """
-        # send actions through the network
-        actions = self.make_actions(actions)
-        self.env.step(actions)
 
-        # reset any terminated environments and update buffers
+        # send actions through the network, and reset any terminated environments and update buffers
+        actions = self.make_actions(actions)
         dones = self.reset_partial()
+        self.env.step(actions)
+        
         self.env.refresh_buffers()
         self.post_physics_step()
 
@@ -207,7 +208,6 @@ class BaseAgent(VecEnv):
         # reward_keys.append('total_reward')
         # reward_vals.append(sum(reward_vals))
         infos[0] = {'names': reward_keys, 'terms': reward_vals}
-
         return new_obs, reward, dones, infos
 
     def render(self) -> torch.Tensor:
