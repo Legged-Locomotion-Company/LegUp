@@ -153,7 +153,7 @@ class BaseAgent(VecEnv):
 
         if len(done_idxs) > 0:
             print(self.ep_lens)
-            
+
             if self.ep_lens[0] == 1:
                 self.stop = 1
 
@@ -194,13 +194,14 @@ class BaseAgent(VecEnv):
 
         # send actions through the network
         actions = self.make_actions(actions)
+        dones = self.reset_partial()
         self.env.step(actions, simulate = self.stop != 2)
 
         # reset any terminated environments and update buffers
-        dones = self.reset_partial()
+        
         self.env.refresh_buffers()
         self.post_physics_step()
-
+        # simulate -> refresh -> setter -> simulate -> refresh -> setter
         done_idx = np.array([0]) # np.argwhere(dones)
         if len(done_idx) > 0 and self.stop != 2:
             # print(self.ep_lens)
