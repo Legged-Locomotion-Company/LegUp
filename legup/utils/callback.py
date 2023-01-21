@@ -4,7 +4,6 @@ import wandb
 from wandb.integration.sb3 import WandbCallback
 
 import numpy as np
-import cv2
 import os
 
 
@@ -58,9 +57,6 @@ class CustomLocalCallback(BaseCallback):
 
         :return: (bool) If the callback returns False, training is aborted early.
         """
-
-        cv2.imshow('training', self.env_.render())
-        cv2.waitKey(1)
 
         return True
 
