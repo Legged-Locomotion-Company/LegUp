@@ -40,6 +40,9 @@ class AnymalAgent(BaseAgent):
 
         self.prev_obs = HistoryBuffer(
             num_environments, self.dt, self.dt, 5, 133 + 208 + 50, self.device)
+        self.prev_action = HistoryBuffer(
+            num_environments, self.dt, self.dt, 5, 12, self.device)
+        
 
         self.action_space = gym.spaces.Box(low=np.ones(
             16) * -10000000, high=np.ones(16) * 10000000, dtype=np.float32)
@@ -95,18 +98,14 @@ class AnymalAgent(BaseAgent):
 
     def dump_log(self):
         # check for nans
-        interesting_idxs = torch.argwhere(torch.isnan(self.prev_obs.data))
-
-        if interesting_idxs.shape[0] > 0:
-            interesting_idxs = self.prev_obs.data.abs().argmax().unsqueeze(0)
-
-        dump_idxs = interesting_idxs[:, 1].unique()
-
-        for j in dump_idxs:
-            # print(f'FOUND NAN IN OBSERVATION {j}')
-            for i in range(5):
-                print(f'Printing observation from timestep {i}:')
-                self.explain_observation(self.prev_obs.get(i)[j, :])
+        nan_idx = torch.unique(torch.argwhere(torch.isnan(self.prev_obs.get(0)))[:, 0])
+        for ni in nan_idx:
+            for ts in range(5):
+                # print(f'OBS AT TIMESTEP {ts} FOR ENV {ni}: ')
+                # self.explain_observation(self.prev_obs.get(ts)[ni])
+                print(f'ACTIONS AT TIMESTEP {ts} FOR ENV {ni}: ')
+                print([round(i.item(), 4) for i in self.prev_action.get(ts)[ni]])
+                print()
 
     def explain_observation(self, obs):
         def round_list_nice(vec):
@@ -196,8 +195,11 @@ class AnymalAgent(BaseAgent):
             idx]
 
         obs = torch.cat([proprio, extro, privil], dim=1)
-
+        
         self.prev_obs.step(obs)
+
+        if torch.any(torch.isnan(obs)):
+            self.dump_log()
 
         return (torch.cat([proprio, extro, privil], dim=1)[idx]).cpu().numpy()
 
@@ -211,6 +213,11 @@ class AnymalAgent(BaseAgent):
 
         actions = walk_half_circle_line(
             self.env.get_joint_position(), actions, self.phase_gen())
+        
+        # delta = torch.clamp(actions - self.env.get_joint_position(), min = -0.25, max = 0.25)
+        # actions = self.env.get_joint_position() + delta
+
+        self.prev_action.step(actions)
 
         return actions
 
@@ -235,9 +242,9 @@ class AnymalAgent(BaseAgent):
         # is_tilted = torch.any(
         #     torch.abs(self.env.get_rotation()) > self.train_cfg["max_tilt"], dim=-1)
 
-        # # # Check if the robot's movements exceed the torque limits
-        # is_exceeding_torque = torch.any(
-        # torch.abs(self.env.get_joint_torque()) > self.train_cfg["max_torque"], dim=-1)
+        # # Check if the robot's movements exceed the torque limits
+        is_exceeding_torque = torch.any(
+        torch.abs(self.env.get_joint_torque()) > self.train_cfg["max_torque"], dim=-1)
 
         # return (is_collided + is_tilted + is_exceeding_torque).bool()
-        return is_collided
+        return (is_collided + is_exceeding_torque).bool()

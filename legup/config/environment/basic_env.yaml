@@ -1,6 +1,6 @@
 # current defaults from Misha's WandB branch
-headless: True
-parallel_envs: 8192
+headless: False
+parallel_envs: 4096
 n_steps: 256
 n_epochs: 5
 batch_size: 32768

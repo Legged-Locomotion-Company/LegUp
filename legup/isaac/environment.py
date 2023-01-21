@@ -111,6 +111,11 @@ class IsaacGymEnvironment:
         self.rb_ang_vel = self.rb_states[:, :, 10:]
         self.num_rb = self.rb_states.shape[1]
 
+    def print_nan(self, tensor, label):
+        if (torch.any(torch.isnan(tensor))):
+            idxs = torch.unique(torch.argwhere(torch.isnan(tensor))[:, 0])
+            print(f'FOUND NAN IN {label} AT INDEX {idxs}')
+
     def refresh_buffers(self):
         """Updates the data in the state tensors, must be called after stepping the simulation"""
         self.gym.refresh_actor_root_state_tensor(self.sim)
@@ -118,6 +123,13 @@ class IsaacGymEnvironment:
         self.gym.refresh_dof_state_tensor(self.sim)
         self.gym.refresh_rigid_body_state_tensor(self.sim)
         self.gym.refresh_net_contact_force_tensor(self.sim)
+
+        self.print_nan(self.root_states, 'ROOT_STATES')
+        self.print_nan(self.dof_states, 'DOF_STATES')
+        self.print_nan(self.dof_forces, 'DOF_FORCES')
+        self.print_nan(self.net_contact_forces, 'NET_CONTACT')
+        self.print_nan(self.rb_states, 'RB_STATES')
+
 
     def get_position(self) -> torch.Tensor:
         """Gets the root position of each robot
