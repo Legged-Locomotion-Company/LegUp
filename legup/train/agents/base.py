@@ -153,8 +153,10 @@ class BaseAgent(VecEnv):
 
         if len(done_idxs) > 0:
             print(self.ep_lens)
+            
             if self.ep_lens[0] == 1:
                 self.stop = 1
+
             self.ep_lens[self.term_idx] = 0
             self.reset_envs(self.term_idx)
             self.env.reset(self.term_idx)
@@ -215,7 +217,7 @@ class BaseAgent(VecEnv):
             foot_vel = self.env.get_rb_linear_velocity()[done_idx]
             joint_angle = self.env.get_joint_position()[done_idx]
             for env_id, (force, state, feet, vel, jangle) in enumerate(zip(reset_foot_contacts_forces, reset_foot_contacts, foot_pos, foot_vel, joint_angle)):
-                print(f'Ep lens {self.ep_lens[0]} | {[round(i.item(), 4) for i in self.env.get_position()[0]]} | {[round(j.item(), 4) for j in jangle]}')
+                print(f'Ep lens {self.ep_lens[0]} | root state: {[round(i.item(), 4) for i in self.env.get_position()[0]]} | joint position: {[round(j.item(), 4) for j in jangle]}')
                 for i in range(13):
                     print(f'{names[i]}: contact state: {state[i]}, forces: {[round(j.item(), 4) for j in force[i]]}, pos: {[round(j.item(), 4) for j in feet[i]]}, vel: {[round(j.item(), 4) for j in vel[i]]}')
                 print()
