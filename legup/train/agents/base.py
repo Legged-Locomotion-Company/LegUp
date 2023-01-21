@@ -53,6 +53,7 @@ class BaseAgent(VecEnv):
         self.metadata = {"render_modes": ['rgb_array']}
         self.reward_range = (-float("inf"), float("inf"))
         self.spec = None
+        self.stop = 0
 
     def make_actions(self, actions: torch.Tensor) -> torch.Tensor:
         """Converts the raw model output into joint target positions. If this isn't implemented, the raw network output is sent to the environment
@@ -151,6 +152,9 @@ class BaseAgent(VecEnv):
         done_idxs = np.array(self.term_idx, dtype=np.int32)
 
         if len(done_idxs) > 0:
+            print(self.ep_lens)
+            if self.ep_lens[0] == 1:
+                self.stop = 1
             self.ep_lens[self.term_idx] = 0
             self.reset_envs(self.term_idx)
             self.env.reset(self.term_idx)
@@ -185,14 +189,41 @@ class BaseAgent(VecEnv):
             environments have terminated/truncated, and additional metadata (currently empty). Observation tensor has shape `(num_envs, observation_space)`
             and all other tensors have shape `(num_envs)`
         """
+
         # send actions through the network
         actions = self.make_actions(actions)
-        self.env.step(actions)
+        self.env.step(actions, simulate = self.stop != 2)
 
         # reset any terminated environments and update buffers
         dones = self.reset_partial()
         self.env.refresh_buffers()
         self.post_physics_step()
+
+        done_idx = np.array([0]) # np.argwhere(dones)
+        if len(done_idx) > 0 and self.stop != 2:
+            # print(self.ep_lens)
+            # names = ['base     ', 'shoulder1', 'knee1    ', 'foot1    ', 'shoulder2', 'knee2    ', 'foot2    ', 'shoulder3', 'knee3    ', 'foot3    ', 'shoulder4', 'knee4    ', 'foot4    ']
+            names = ['body', 'abduct_fl', 'thigh_fl', 'shank_fl', 'abduct_fr', 'thigh_fr', 'shank_fr', 'abduct_hl', 'thigh_hl', 'shank_hl', 'abduct_hr', 'thigh_hr', 'shank_hr']
+            max_len = max([len(i) for i in names])
+            names = [i + ' ' * (max_len - len(i)) for i in names]
+
+
+            done_idx = done_idx.reshape(-1)
+            reset_foot_contacts_forces = self.env.get_contact_forces()[done_idx]
+            reset_foot_contacts = self.env.get_contact_states()[done_idx]
+            foot_pos = self.env.get_rb_position()[done_idx]
+            foot_vel = self.env.get_rb_linear_velocity()[done_idx]
+            joint_angle = self.env.get_joint_position()[done_idx]
+            for env_id, (force, state, feet, vel, jangle) in enumerate(zip(reset_foot_contacts_forces, reset_foot_contacts, foot_pos, foot_vel, joint_angle)):
+                print(f'Ep lens {self.ep_lens[0]} | {[round(i.item(), 4) for i in self.env.get_position()[0]]} | {[round(j.item(), 4) for j in jangle]}')
+                for i in range(13):
+                    print(f'{names[i]}: contact state: {state[i]}, forces: {[round(j.item(), 4) for j in force[i]]}, pos: {[round(j.item(), 4) for j in feet[i]]}, vel: {[round(j.item(), 4) for j in vel[i]]}')
+                print()
+                # print([round(i.item(), 4) for i in age  ])
+
+        if self.ep_lens[0] > 10 and self.stop == 1:
+            self.stop = 2
+
 
         # compute new observations and rewards
         new_obs = self.make_observation()
@@ -207,7 +238,6 @@ class BaseAgent(VecEnv):
         # reward_keys.append('total_reward')
         # reward_vals.append(sum(reward_vals))
         infos[0] = {'names': reward_keys, 'terms': reward_vals}
-
         return new_obs, reward, dones, infos
 
     def render(self) -> torch.Tensor:
