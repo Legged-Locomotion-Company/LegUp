@@ -18,5 +18,5 @@ reward_scales:
   joint_velocities: 0.001
   joint_constraints: 0.08
   target_smoothness: 0.003
-  torque: 0.000001
+  torque: 0.000025
   slip: 0.003
