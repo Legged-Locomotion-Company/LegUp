@@ -20,3 +20,4 @@ reward_scales:
   target_smoothness: 0.003
   torque: 0.000025
   slip: 0.003
+  clip: 0.001

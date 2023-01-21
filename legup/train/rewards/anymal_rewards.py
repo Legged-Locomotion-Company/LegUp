@@ -28,7 +28,7 @@ class WildAnymalReward:
 
         self.train_cfg = train_cfg
 
-    def __call__(self, previous_joint_velocities: torch.Tensor, joint_target_t_1: torch.Tensor, joint_target_t_2: torch.Tensor, curriculum_factor: float = 1.0) -> torch.Tensor:
+    def __call__(self, previous_joint_velocities: torch.Tensor, joint_target_t_1: torch.Tensor, joint_target_t_2: torch.Tensor, raw_network_output: torch.Tensor, curriculum_factor: float = 1.0) -> torch.Tensor:
         """Compute reward.
 
         Args:
@@ -142,6 +142,13 @@ class WildAnymalReward:
         
         reward_log['slip_reward'] = slip_reward
         reward += slip_reward
+
+        pos_clip_reward = (raw_network_output.abs()[:, :12] - self.train_cfg.pos_delta_clip).sum(dim=1)
+        phase_clip_violation = (raw_network_output.abs()[:, 12:] - self.train_cfg.phase_delta_clip).sum(dim=1)
+        clip_reward = (pos_clip_reward + phase_clip_violation) * self.reward_scales.clip
+
+        reward_log['clip_reward'] = clip_reward
+        reward += clip_reward
 
         # reward_log_keys_per_env = [[key for key in reward_log.keys()] for _ in range(self.env.num_environments)]
         # reward_log_values_per_env = [[value[i] for value in reward_log.values()] for i in range(self.env.num_environments)]
