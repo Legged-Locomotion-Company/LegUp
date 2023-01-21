@@ -3,7 +3,7 @@ tensorboard_log_dir: ./anymal_train_tb
 command: [1.0, 0.0, 0.0]
 turn_command: 0.0
 knee_threshold: [0.5, 0.5, 0.5, 0.5]
-max_torque: 90
+max_torque: 20
 # 3pi/2
 max_tilt: 4.71239
 
