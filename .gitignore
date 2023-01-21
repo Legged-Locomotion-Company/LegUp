@@ -149,3 +149,6 @@ legup/outputs/*
 isaacgym/*
 IsaacGym_Preview_4_Package.tar.gz
 legup/onstart.sh
+
+# checkpoints
+legup/checkpoints/*

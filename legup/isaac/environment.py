@@ -272,7 +272,7 @@ class IsaacGymEnvironment:
             env_index = self.all_env_index[env_index]
 
         random_pos = torch.rand(len(env_index), 3) * 2
-        random_pos[:, 2] = 0.38
+        random_pos[:, 2] = 0.40
 
         # TODO: make faster for cuda?
         random_rot = torch.zeros(len(env_index), 3)

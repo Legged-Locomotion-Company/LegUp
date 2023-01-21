@@ -48,11 +48,20 @@ class WildAnymalReward:
         w_des = torch.zeros_like(w_act)
         w_des[:] = self.train_cfg.turn_command
 
-        velocity_rewards = lin_velocity(v_des, v_act[:, :2]) + ang_velocity(
-            w_des[:, 2], w_act[:, 2]) + linear_ortho_velocity(v_des, v_act[:, :2]) * self.reward_scales.velocity
+        lin_velocity_reward = lin_velocity(v_des, v_act[:, :2]) * self.reward_scales.velocity
 
-        reward_log['lin_velocity_reward'] = velocity_rewards
-        reward += velocity_rewards
+        reward_log['lin_velocity_reward'] = lin_velocity_reward
+        reward += lin_velocity_reward
+
+        ang_velocity_reward = ang_velocity(w_des[:, 2], w_act[:, 2]) * self.reward_scales.velocity
+
+        reward_log['ang_velocity_reward'] = ang_velocity_reward
+        reward += ang_velocity_reward
+
+        lin_ortho_reward = linear_ortho_velocity(v_des, v_act[:, :2]) * self.reward_scales.velocity
+
+        reward_log['lin_ortho_reward'] = lin_ortho_reward
+        reward += lin_ortho_reward
 
         body_motion_reward = self.reward_scales.body_motion * \
             body_motion(v_act[:, 2], w_act[:, 0], w_act[:, 1])

@@ -131,10 +131,10 @@ def lin_velocity(v_des: torch.Tensor, v_act: torch.Tensor, scale: float = 1.0):
 
     dots = torch.einsum('Bi,Bj->B', v_des, v_act)
 
-    result = torch.exp(-dots - v_des_norm**2)
+    result = torch.exp(-(dots - v_des_norm)**2)
 
     mask = v_des_norm == 0.0
-    result[mask] = torch.exp(-v_act.norm(dim=-1)[mask])
+    result[mask] = torch.exp(-torch.einsum('Bi,Bi->B', v_act, v_act)[mask])
 
     mask = dots > v_des_norm
     result[mask] = 1.0
@@ -160,7 +160,7 @@ def ang_velocity(w_des_yaw: torch.Tensor, w_act_yaw: torch.Tensor, scale: float 
 
     dots = w_des_yaw * w_act_yaw
 
-    result = torch.exp(-dots - w_des_yaw**2)
+    result = torch.exp(-(dots - w_des_yaw)**2)
 
     mask = w_des_yaw == 0.0
     result[mask] = torch.exp(-w_act_yaw[mask]**2)
