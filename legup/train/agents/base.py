@@ -186,6 +186,8 @@ class BaseAgent(VecEnv):
             and all other tensors have shape `(num_envs)`
         """
         # send actions through the network
+        reward, reward_keys, reward_vals = self.make_reward(actions)
+
         actions = self.make_actions(actions)
         self.env.step(actions)
 
@@ -196,7 +198,6 @@ class BaseAgent(VecEnv):
 
         # compute new observations and rewards
         new_obs = self.make_observation()
-        reward, reward_keys, reward_vals = self.make_reward(actions)
 
         # update tracking info (episodes done, terminated environments)
         self.ep_lens += 1
