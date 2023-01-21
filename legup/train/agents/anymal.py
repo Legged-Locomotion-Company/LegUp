@@ -213,9 +213,6 @@ class AnymalAgent(BaseAgent):
 
         actions = walk_half_circle_line(
             self.env.get_joint_position(), actions, self.phase_gen())
-        
-        # delta = torch.clamp(actions - self.env.get_joint_position(), min = -0.25, max = 0.25)
-        # actions = self.env.get_joint_position() + delta
 
         self.prev_action.step(actions)
 

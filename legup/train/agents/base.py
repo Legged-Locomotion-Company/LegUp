@@ -193,8 +193,6 @@ class BaseAgent(VecEnv):
         actions = self.make_actions(actions)
         dones = self.reset_partial()
 
-        print(actions.abs().max())
-
         self.env.print_nan(actions, 'ACTIONS')
         self.env.step(actions)
         
