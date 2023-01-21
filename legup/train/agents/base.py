@@ -1,5 +1,6 @@
 from legup.isaac.environment import IsaacGymEnvironment
 from legup.robots.Robot import Robot
+from legup.train.rewards.util import HistoryBuffer
 
 from typing import Union, List, Tuple
 
@@ -43,6 +44,7 @@ class BaseAgent(VecEnv):
 
         self.dt = 1. / 60.  # TODO: make this config
         self.max_ep_len = 1000 / self.dt  # TODO: make this config
+
 
         # OpenAI Gym Environment required fields
         # TODO: custom observation space/action space bounds, this would help with clipping!
@@ -190,6 +192,10 @@ class BaseAgent(VecEnv):
         # send actions through the network, and reset any terminated environments and update buffers
         actions = self.make_actions(actions)
         dones = self.reset_partial()
+
+        print(actions.abs().max())
+
+        self.env.print_nan(actions, 'ACTIONS')
         self.env.step(actions)
         
         self.env.refresh_buffers()
