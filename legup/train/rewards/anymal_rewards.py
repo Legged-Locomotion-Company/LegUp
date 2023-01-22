@@ -143,9 +143,13 @@ class WildAnymalReward:
         reward_log['slip_reward'] = slip_reward
         reward += slip_reward
 
-        pos_clip_reward = -(raw_network_output.abs()[:, :12] - self.train_cfg.pos_delta_clip).sum(dim=1)
-        phase_clip_violation = -(raw_network_output.abs()[:, 12:] - self.train_cfg.phase_delta_clip).sum(dim=1)
-        clip_reward = (pos_clip_reward + phase_clip_violation).clamp(max=0.0) * self.reward_scales.clip
+        pos_clip_violation = (raw_network_output.abs()[:, :12] - self.train_cfg.pos_delta_clip).clamp(max=0.0)
+        phase_clip_violation = (raw_network_output.abs()[:, 12:] - self.train_cfg.phase_delta_clip).clamp(max=0.0)
+
+        pos_clip_violation_sq = torch.einsum('Bi,Bi->B', pos_clip_violation, pos_clip_violation)
+        phase_clip_violation_sq = torch.einsum('Bi,Bi->B', phase_clip_violation, phase_clip_violation)
+
+        clip_reward = -(pos_clip_violation_sq + phase_clip_violation_sq) * self.reward_scales.clip
 
         reward_log['clip_reward'] = clip_reward
         reward += clip_reward

@@ -12,7 +12,7 @@ phase_delta_clip: 3.14
 
 reward_scales:
   velocity: 0.75
-  body_motion: 1
+  body_motion: 0.1
   foot_clearance: 0.003
   shank_knee_col: 0.1
   joint_velocities: 0.001
@@ -20,4 +20,4 @@ reward_scales:
   target_smoothness: 0.003
   torque: 0.000025
   slip: 0.003
-  clip: 100.0
+  clip: 0.025
