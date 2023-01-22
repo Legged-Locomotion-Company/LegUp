@@ -188,20 +188,19 @@ class BaseAgent(VecEnv):
             environments have terminated/truncated, and additional metadata (currently empty). Observation tensor has shape `(num_envs, observation_space)`
             and all other tensors have shape `(num_envs)`
         """
+        # send actions through the network
+        reward, reward_keys, reward_vals = self.make_reward(actions)
 
-        # send actions through the network, and reset any terminated environments and update buffers
         actions = self.make_actions(actions)
-        dones = self.reset_partial()
-
-        self.env.print_nan(actions, 'ACTIONS')
         self.env.step(actions)
-        
+
+        # reset any terminated environments and update buffers
+        dones = self.reset_partial()
         self.env.refresh_buffers()
         self.post_physics_step()
 
         # compute new observations and rewards
         new_obs = self.make_observation()
-        reward, reward_keys, reward_vals = self.make_reward(actions)
 
         # update tracking info (episodes done, terminated environments)
         self.ep_lens += 1

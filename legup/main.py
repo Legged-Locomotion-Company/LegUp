@@ -8,7 +8,6 @@ from legup.utils.wandb_wrapper import WandBWrapper
 from legup.robots.mini_cheetah.mini_cheetah import MiniCheetah
 from legup.train.models.anymal.teacher import CustomTeacherActorCriticPolicy
 
-import cv2
 import hydra
 from omegaconf import DictConfig
 import os
@@ -17,6 +16,7 @@ import uuid
 import time
 
 root_path = None
+
 
 def train_ppo(cfg: DictConfig, root_path: str):
 
@@ -110,6 +110,8 @@ def run_training(model, total_timesteps, callback, cfg, id=None, wandb_wrapper=N
                      id=id, wandb_wrapper=wandb_wrapper, retry_count=new_retry_count, resume=True, log_dump_func=log_dump_func)
 
 # Runs the agent based on a saved model
+
+
 def eval_ppo(cfg: DictConfig):
     env = GPUVecEnv(
         1, f"{os.getcwd()}/robots/mini_cheetah/physical_models", "mini-cheetah.urdf")
@@ -119,8 +121,6 @@ def eval_ppo(cfg: DictConfig):
     for _ in range(100000):
         action, _states = model.predict(obs)
         obs, rewards, dones, info = env.step(action)
-        cv2.imshow('training', env.render())
-        cv2.waitKey(1)
 
 
 @hydra.main(config_path="config", config_name="config")
