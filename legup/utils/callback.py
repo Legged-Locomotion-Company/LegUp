@@ -1,10 +1,10 @@
-from stable_baselines3.common.monitor import Monitor
-from stable_baselines3.common.callbacks import BaseCallback
-import wandb
-from wandb.integration.sb3 import WandbCallback
-
+import cv2
 import numpy as np
 import os
+from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.monitor import Monitor
+import wandb
+from wandb.integration.sb3 import WandbCallback
 
 
 class CustomLocalCallback(BaseCallback):
@@ -57,6 +57,9 @@ class CustomLocalCallback(BaseCallback):
 
         :return: (bool) If the callback returns False, training is aborted early.
         """
+
+        cv2.imshow('training', self.env_.render())
+        cv2.waitKey(1)
 
         return True
 

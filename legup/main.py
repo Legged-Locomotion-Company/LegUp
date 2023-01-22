@@ -8,6 +8,7 @@ from legup.utils.wandb_wrapper import WandBWrapper
 from legup.robots.mini_cheetah.mini_cheetah import MiniCheetah
 from legup.train.models.anymal.teacher import CustomTeacherActorCriticPolicy
 
+import cv2
 import hydra
 from omegaconf import DictConfig
 import os
@@ -121,6 +122,8 @@ def eval_ppo(cfg: DictConfig):
     for _ in range(100000):
         action, _states = model.predict(obs)
         obs, rewards, dones, info = env.step(action)
+        cv2.imshow('training', env.render())
+        cv2.waitKey(1)
 
 
 @hydra.main(config_path="config", config_name="config")
