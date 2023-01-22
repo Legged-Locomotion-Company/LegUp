@@ -26,6 +26,8 @@ class MiniCheetah(Robot):
 
     num_joints = 12
 
+    joint_polarity = torch.Tensor([0.0, 0.0, -1.0, 0.0, 0.0, 1.0, 0.0, 0.0, -1.0, 0.0, 0.0, 1.0], device=Robot.device)
+
     def foot_positions(q: torch.Tensor):
         """Calculates the foot positions given joint angles
 

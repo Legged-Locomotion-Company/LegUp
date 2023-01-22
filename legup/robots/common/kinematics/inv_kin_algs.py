@@ -7,18 +7,18 @@ def dls_invkin(j: torch.Tensor, e: torch.Tensor, lam: torch.float = 0.05):
     """Executes Dampened Least Squares algorithm on inputs
 
     Args:
-        j (torch.Tensor): a (NUM_ENVS x 3 x 3) tensor with the jacobians for each of the end effectors
-        e (torch.Tensor): a (NUM_ENVS x 3) tensor with the error for each of the end effectors
+        j (torch.Tensor): a (NUM_ENVS x NUM_DOFS) tensor with the jacobians for each of the end effectors
+        e (torch.Tensor): a (NUM_ENVS x NUM_DOFS) tensor with the error for each of the end effectors
         lam (torch.float): a scalar weight on the dampening for the optimization. The higher the lambda the slower it will be, but the more stable.
 
     Returns:
         torch.Tensor: a (NUM_ENVS x 3) tensor with the command delta to be applied
     """
 
-    NUM_ENVS, dim, _ = j.shape
+    NUM_ENVS, NUM_DOFS, _ = j.shape
 
     j_T = j.transpose(-1, -2)
-    lam_eye = (torch.eye(dim, device=device) * (lam ** 2)).expand(NUM_ENVS, -1, -1)
+    lam_eye = (torch.eye(NUM_DOFS, device=device) * (lam ** 2)).expand(NUM_ENVS, -1, -1)
 
     jj_T_lameye = j @ j_T + lam_eye
 
@@ -26,6 +26,7 @@ def dls_invkin(j: torch.Tensor, e: torch.Tensor, lam: torch.float = 0.05):
     jj_T_lameye_inv = torch.linalg.pinv(jj_T_lameye)
 
     u = torch.einsum('Bij,Bjk,Bk->Bi', j_T, jj_T_lameye_inv, e)
+
     return u
 
 

@@ -124,6 +124,8 @@ def use_ik(robot: Robot, q_vec, goals, ik_alg):
         torch.Tensor: returns a (NUM_ENVS x 12) vector which contains the new targets for each of the robot's joints
     """
 
+    NUM_ENVS = q_vec.shape[0]
+
     # Here we dissect the goals tensor to create a (NUM_ENVS x 4 x 3) vector which contains the joint targets for each of the robots 4 feet separately
     goals_per_foot = goals.reshape(-1, 4, 3)
 
@@ -141,7 +143,13 @@ def use_ik(robot: Robot, q_vec, goals, ik_alg):
     # overwriting the nan values with 0
     torch.nan_to_num(per_foot_errors, out=per_foot_errors)
 
-    return q_vec + per_foot_errors.reshape((-1, 12))
+    per_env_errors = per_foot_errors.reshape((-1, 12))
+
+    # Joint polarity enforcement
+    wrong_direction = per_env_errors * robot.joint_polarity < 0.0
+    per_env_errors[wrong_direction] *= -1.0
+
+    return q_vec + per_env_errors
 
 
 def mini_cheetah_dls_invkin(q_vec, goals):
