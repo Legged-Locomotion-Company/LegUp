@@ -98,13 +98,13 @@ class WildAnymalReward:
 
         # We only set a threshold for the knee joints.
         joint_positions = self.env.get_joint_position()
-        knee_joint_positions = joint_positions[:,
-                                               self.robot_config.knee_indices]
-        joint_constraints_reward = self.reward_scales.joint_constraints * \
-            joint_constraint(knee_joint_positions, self.knee_threshold)
+        # knee_joint_positions = joint_positions[:,
+        #                                        self.robot_config.knee_indices]
+        # joint_constraints_reward = self.reward_scales.joint_constraints * \
+        #     joint_constraint(knee_joint_positions, self.knee_threshold)
 
-        reward_log['joint_constraints_reward'] = joint_constraints_reward
-        reward += joint_constraints_reward
+        # reward_log['joint_constraints_reward'] = joint_constraints_reward
+        # reward += joint_constraints_reward
 
         # If no joint history exists (first iteration), set to zero
         if joint_target_t_1 is None:
