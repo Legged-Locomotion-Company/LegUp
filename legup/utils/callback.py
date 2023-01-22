@@ -1,11 +1,10 @@
-from stable_baselines3.common.monitor import Monitor
+import cv2
+import numpy as np
+import os
 from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.monitor import Monitor
 import wandb
 from wandb.integration.sb3 import WandbCallback
-
-import numpy as np
-import cv2
-import os
 
 
 class CustomLocalCallback(BaseCallback):

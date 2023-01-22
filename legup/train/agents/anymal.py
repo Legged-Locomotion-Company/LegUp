@@ -208,8 +208,10 @@ class AnymalAgent(BaseAgent):
         if isinstance(actions, np.ndarray):
             actions = torch.tensor(actions).to(self.device)
 
-        actions[0:12] = actions[0:12].clip(max=self.train_cfg.pos_delta_clip, min=-self.train_cfg.pos_delta_clip)
-        actions[12:] = actions[12:].clip(max=self.train_cfg.phase_delta_clip, min=-self.train_cfg.phase_delta_clip)
+        actions[0:12] = actions[0:12].clip(
+            max=self.train_cfg.pos_delta_clip, min=-self.train_cfg.pos_delta_clip)
+        actions[12:] = actions[12:].clip(
+            max=self.train_cfg.phase_delta_clip, min=-self.train_cfg.phase_delta_clip)
 
         actions = walk_half_circle_line(
             self.env.get_joint_position(), actions, self.phase_gen())
@@ -221,7 +223,8 @@ class AnymalAgent(BaseAgent):
     def make_reward(self, actions: torch.Tensor) -> torch.Tensor:
         total_reward, reward_keys, reward_vals = self.reward_fn(self.joint_vel_history[:, :, 0],
                                                                 self.joint_target_history[:, :, 0],
-                                                                self.joint_target_history[:, :, 1])
+                                                                self.joint_target_history[:, :, 1],
+                                                                actions)
 
         return total_reward.cpu(), reward_keys, reward_vals
 

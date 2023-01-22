@@ -1,10 +1,10 @@
 # current defaults from Misha's WandB branch
 headless: True
 parallel_envs: 8192
-n_steps: 128
+n_steps: 512
 n_epochs: 5
 batch_size: 32768
-entropy_coef: 0.1
+entropy_coef: 0.001
 value_coef: 0.5
 learning_rate: 0.0005
 gae_lambda: 0.95
