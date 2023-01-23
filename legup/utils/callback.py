@@ -71,7 +71,7 @@ class CustomLocalCallback(BaseCallback):
         infos = self.locals['infos'][0]
         for reward_name, reward_val in zip(infos['reward_names'], infos['reward_terms']):
             self.logger.record(
-                f"rewards/{reward_name}", reward_val)
+                f"rewards/{reward_name}", reward_val.item())
 
         for log_name, log_val in infos['logs'].items():
             self.logger.record(
@@ -152,7 +152,7 @@ class CustomWandbCallback(WandbCallback):
         infos = self.locals['infos'][0]
         for reward_name, reward_val in zip(infos['reward_names'], infos['reward_terms']):
             self.logger.record(
-                f"rewards/{reward_name}", reward_val)
+                f"rewards/{reward_name}", reward_val.item())
 
         for log_name, log_val in infos['logs'].items():
             self.logger.record(
