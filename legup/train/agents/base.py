@@ -23,7 +23,7 @@ class BaseAgent(VecEnv):
     Read the documentation for each of these functions to learn how to implement them!
     """
 
-    def __init__(self, robot: Robot, num_environments: int, episode_len:int, asset_path: str, asset_name: str):
+    def __init__(self, robot: Robot, num_environments: int, asset_path: str, asset_name: str):
         """
         Args:
             num_environments (int): number of parallel environments to create in simulator
