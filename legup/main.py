@@ -22,7 +22,7 @@ root_path = None
 def train_ppo(cfg: DictConfig, root_path: str):
 
     total_timesteps = cfg.environment.parallel_envs * \
-        cfg.environment.n_steps * 1e6
+        cfg.environment.n_steps * 1e7
 
     env = AnymalAgent(MiniCheetah, cfg.environment.parallel_envs,
                       f"{root_path}/robots/mini_cheetah/physical_models", "mini-cheetah.urdf", train_cfg=cfg.agent)

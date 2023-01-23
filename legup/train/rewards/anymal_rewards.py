@@ -103,13 +103,13 @@ class WildAnymalReward:
 
         # We only set a threshold for the knee joints.
         joint_positions = self.env.get_joint_position()
-        knee_joint_positions = joint_positions[:,
-                                               self.robot_config.knee_indices]
-        joint_constraints_reward = self.reward_scales.joint_constraints * \
-            joint_constraint(knee_joint_positions, self.knee_threshold)
+        # knee_joint_positions = joint_positions[:,
+        #                                        self.robot_config.knee_indices]
+        # joint_constraints_reward = self.reward_scales.joint_constraints * \
+        #     joint_constraint(knee_joint_positions, self.knee_threshold)
 
-        reward_log['joint_constraints_reward'] = joint_constraints_reward
-        reward += joint_constraints_reward
+        # reward_log['joint_constraints_reward'] = joint_constraints_reward
+        # reward += joint_constraints_reward
 
         # If no joint history exists (first iteration), set to zero
         if joint_target_t_1 is None:
@@ -149,12 +149,12 @@ class WildAnymalReward:
         reward += slip_reward
 
         pos_delta_clip_reward = self.reward_scales.pos_delta_clip * \
-            clip(actions[0:12])
+            clip(actions[:, 0:12], self.train_cfg.pos_delta_clip)
         reward_log['pos_delta_clip_reward'] = pos_delta_clip_reward
         reward += pos_delta_clip_reward
 
         phase_clip_reward = self.reward_scales.phase_clip * \
-            clip(actions[12:])
+            clip(actions[:, 12:], self.train_cfg.phase_delta_clip)
         reward_log['phase_clip_reward'] = phase_clip_reward
         reward += phase_clip_reward
 

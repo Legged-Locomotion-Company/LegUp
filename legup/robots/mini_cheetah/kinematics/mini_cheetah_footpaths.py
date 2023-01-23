@@ -17,7 +17,7 @@ def walk_half_circle_line(q_vec, pos_phase_deltas, phases):
         torch.Tensor: a (NUM_ENVS x 12) tensor with the new target joint angles of each foot in the robot
     """
 
-    phase_offsets = torch.tensor([0, torch.pi, 0, torch.pi])
+    phase_offsets = torch.tensor([0, 0, 0, 0], device=device)
 
     result = use_gait_footpath(q_vec, pos_phase_deltas, phases, half_circle_line, phase_offsets)
 
@@ -73,7 +73,7 @@ def half_circle_line(phase):
 
     result = torch.zeros((NUM_ENVS, 4, 3)).to(device)
 
-    result[:, :, 0] = torch.cos(phase) * x_amp
+    result[:, :, 0] = -torch.cos(phase) * x_amp
     result[:, :, 1] = torch.zeros_like(phase).to(device)
     result[:, :, 2] = torch.sin(phase) * z_amp
 

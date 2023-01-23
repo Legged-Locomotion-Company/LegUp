@@ -8,7 +8,7 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
 # def get_home_position():
-    # return torch.tensor([0, -0.8, 1.6, 0, -0.8, 1.6, 0, -0.8, 1.6, 0, -0.8, 1.6]).to(device)
+# return torch.tensor([0, -0.8, 1.6, 0, -0.8, 1.6, 0, -0.8, 1.6, 0, -0.8, 1.6]).to(device)
 
 
 def build_jacobian_and_fk(q_vec, leg):
@@ -124,7 +124,8 @@ def use_ik(robot: Robot, q_vec, goals, ik_alg):
         torch.Tensor: returns a (NUM_ENVS x 12) vector which contains the new targets for each of the robot's joints
     """
 
-    # Here we dissect the goals tensor to create a (NUM_ENVS x 4 x 3) vector which contains the joint targets for each of the robots 4 feet separately
+    NUM_ENVS = q_vec.shape[0]
+
     goals_per_foot = goals.reshape(-1, 4, 3)
 
     # Here we find the foot errors and the jacobian
@@ -141,7 +142,21 @@ def use_ik(robot: Robot, q_vec, goals, ik_alg):
     # overwriting the nan values with 0
     torch.nan_to_num(per_foot_errors, out=per_foot_errors)
 
-    return q_vec + per_foot_errors.reshape((-1, 12))
+    per_env_errors = per_foot_errors.reshape((-1, 12))
+
+    q_vec_mod = (q_vec+torch.pi).remainder(2*torch.pi) - torch.pi
+
+    # Enforce joint polarity
+    wrong_direction = (q_vec_mod * robot.joint_polarity) < 0.0
+    corrections = (-2 * q_vec_mod[wrong_direction]).clamp(min=-0.25, max=0.25)
+
+    targets = q_vec_mod
+    targets[:] = q_vec.clone()
+
+    targets[wrong_direction] += corrections
+    targets[~wrong_direction] += per_env_errors[~wrong_direction]
+
+    return targets
 
 
 def mini_cheetah_dls_invkin(q_vec, goals):
