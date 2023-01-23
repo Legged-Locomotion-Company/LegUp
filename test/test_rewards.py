@@ -92,3 +92,13 @@ def test_confirm_reward_collision_dimensions(num_envs):
         torch.rand([num_envs, 2]), 0.1).shape
     assert shank_or_knee_col_shape == torch.Size(
         [num_envs, ]), "shank_or_knee_col should be shape ({num_envs},), but is {shank_or_knee_col_shape}".format(num_envs=num_envs, shank_or_knee_col_shape=shank_or_knee_col_shape)
+
+
+@pytest.mark.parametrize("num_envs", [1, 2, 10, 1000])
+def test_clip_reward_dimensions(num_envs):
+    """
+    Confirm that the reward dimensions are correct.
+    """
+    clip_shape = clip_reward(torch.rand([num_envs, 12]), 0.1).shape
+    assert clip_shape == torch.Size(
+        [num_envs, ]), "clip_reward should be shape ({num_envs},), but is {clip_shape}".format(num_envs=num_envs, clip_shape=clip_shape)

@@ -18,6 +18,7 @@ import time
 
 root_path = None
 
+
 def train_ppo(cfg: DictConfig, root_path: str):
 
     total_timesteps = cfg.environment.parallel_envs * \
@@ -110,6 +111,8 @@ def run_training(model, total_timesteps, callback, cfg, id=None, wandb_wrapper=N
                      id=id, wandb_wrapper=wandb_wrapper, retry_count=new_retry_count, resume=True, log_dump_func=log_dump_func)
 
 # Runs the agent based on a saved model
+
+
 def eval_ppo(cfg: DictConfig):
     env = GPUVecEnv(
         1, f"{os.getcwd()}/robots/mini_cheetah/physical_models", "mini-cheetah.urdf")

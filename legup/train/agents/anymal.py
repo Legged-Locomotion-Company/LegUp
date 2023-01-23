@@ -28,8 +28,6 @@ class AnymalAgent(BaseAgent):
         """
         super().__init__(robot_cfg, num_environments, asset_path, asset_name)
 
-        self.raw_network_output = torch.zeros((num_environments, 16)).to(self.device)
-
         # need more stuff for reward function like train config
         self.dt = 1/60
         # (self, env, robot_config, train_config, dt: float):
@@ -59,7 +57,6 @@ class AnymalAgent(BaseAgent):
                 self.robot_cfg.num_joints, 2).to(self.device)
             self.joint_target_history[idx] = torch.zeros(
                 self.robot_cfg.num_joints, 2).to(self.device)
-            self.raw_network_output[idx, :] = 0.0
 
         else:
             self.joint_pos_history = torch.zeros(
@@ -68,7 +65,6 @@ class AnymalAgent(BaseAgent):
                 self.num_envs, self.robot_cfg.num_joints, 2).to(self.device)
             self.joint_target_history = torch.zeros(
                 self.num_envs, self.robot_cfg.num_joints, 2).to(self.device)
-            self.raw_network_output[:, :] = 0.0
 
     def phase_gen(self):
         cpg_freq = 4.0
@@ -212,10 +208,10 @@ class AnymalAgent(BaseAgent):
         if isinstance(actions, np.ndarray):
             actions = torch.tensor(actions).to(self.device)
 
-        self.raw_network_output[:] = actions
-
-        actions[0:12] = actions[0:12].clip(max=self.train_cfg.pos_delta_clip, min=-self.train_cfg.pos_delta_clip)
-        actions[12:] = actions[12:].clip(max=self.train_cfg.phase_delta_clip, min=-self.train_cfg.phase_delta_clip)
+        actions[0:12] = actions[0:12].clip(
+            max=self.train_cfg.pos_delta_clip, min=-self.train_cfg.pos_delta_clip)
+        actions[12:] = actions[12:].clip(
+            max=self.train_cfg.phase_delta_clip, min=-self.train_cfg.phase_delta_clip)
 
         actions = walk_half_circle_line(
             self.env.get_joint_position(), actions, self.phase_gen())
@@ -228,7 +224,7 @@ class AnymalAgent(BaseAgent):
         total_reward, reward_keys, reward_vals = self.reward_fn(self.joint_vel_history[:, :, 0],
                                                                 self.joint_target_history[:, :, 0],
                                                                 self.joint_target_history[:, :, 1],
-                                                                self.raw_network_output)
+                                                                actions)
 
         return total_reward.cpu(), reward_keys, reward_vals
 
