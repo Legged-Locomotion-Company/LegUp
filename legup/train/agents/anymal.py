@@ -26,7 +26,7 @@ class AnymalAgent(BaseAgent):
             asset_name (str): Name of the robot asset
             train_cfg (DictConfig): Configuration dictionary for training
         """
-        
+
         super().__init__(robot_cfg, num_environments, curriculum_exponent, asset_path, asset_name)
 
         # need more stuff for reward function like train config
@@ -236,6 +236,9 @@ class AnymalAgent(BaseAgent):
                                                                 self.curriculum_factor)
 
         return total_reward.cpu(), reward_keys, reward_vals
+    
+    def make_logs(self) -> dict:
+        return {"curriculum_factor": self.curriculum_factor}
 
     def reset_envs(self, envs):
         self.reset_history_vec(envs)

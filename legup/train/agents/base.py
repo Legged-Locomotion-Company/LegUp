@@ -179,6 +179,9 @@ class BaseAgent(VecEnv):
 
         return self.make_observation()
 
+    def make_logs(self) -> dict:
+        return {}
+
     def step(self, actions: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict]:
         """Does a single step of the simulation environment based on a given command, and computes new state information and rewards
 
@@ -207,6 +210,8 @@ class BaseAgent(VecEnv):
         # compute new observations and rewards
         new_obs = self.make_observation()
 
+        logs = self.make_logs()
+
         # update tracking info (episodes done, terminated environments)
         self.ep_lens += 1
         self.term_idx = self.get_termination_list(reward)
@@ -215,7 +220,7 @@ class BaseAgent(VecEnv):
         infos = [{}] * self.num_envs
         # reward_keys.append('total_reward')
         # reward_vals.append(sum(reward_vals))
-        infos[0] = {'names': reward_keys, 'terms': reward_vals}
+        infos[0] = {'reward_names': reward_keys, 'reward_terms': reward_vals, 'logs': logs}
         return new_obs, reward, dones, infos
 
     def render(self) -> torch.Tensor:
