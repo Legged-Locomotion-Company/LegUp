@@ -24,7 +24,7 @@ def train_ppo(cfg: DictConfig, root_path: str):
     total_timesteps = cfg.environment.parallel_envs * \
         cfg.environment.n_steps * 1e7
 
-    env = AnymalAgent(MiniCheetah, cfg.environment.parallel_envs,
+    env = AnymalAgent(MiniCheetah, cfg.environment.parallel_envs, cfg.environment.curriculum_exponent,
                       f"{root_path}/robots/mini_cheetah/physical_models", "mini-cheetah.urdf", train_cfg=cfg.agent)
 
     cb = None

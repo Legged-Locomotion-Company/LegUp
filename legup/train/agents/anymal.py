@@ -16,7 +16,7 @@ class AnymalAgent(BaseAgent):
     """Specific agent implementation for https://leggedrobotics.github.io/rl-perceptiveloco/assets/pdf/wild_anymal.pdf
     """
 
-    def __init__(self, robot_cfg: Robot, num_environments: int, asset_path: str, asset_name: str, train_cfg: DictConfig):
+    def __init__(self, robot_cfg: Robot, num_environments: int, curriculum_exponent: int, asset_path: str, asset_name: str, train_cfg: DictConfig):
         """Initialize wild anymal agent.
 
         Args:
@@ -26,7 +26,8 @@ class AnymalAgent(BaseAgent):
             asset_name (str): Name of the robot asset
             train_cfg (DictConfig): Configuration dictionary for training
         """
-        super().__init__(robot_cfg, num_environments, asset_path, asset_name)
+        
+        super().__init__(robot_cfg, num_environments, curriculum_exponent, asset_path, asset_name)
 
         # need more stuff for reward function like train config
         self.dt = 1/60
