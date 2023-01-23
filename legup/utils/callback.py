@@ -69,7 +69,7 @@ class CustomLocalCallback(BaseCallback):
         """
 
         infos = self.locals['infos'][0]
-        for reward_name, reward_val in zip(infos['reward_names'], infos['reward_vals']):
+        for reward_name, reward_val in zip(infos['reward_names'], infos['reward_terms']):
             self.logger.record(
                 f"rewards/{reward_name}", reward_val)
 
@@ -150,7 +150,7 @@ class CustomWandbCallback(WandbCallback):
                 raise Exception("test_exception")
 
         infos = self.locals['infos'][0]
-        for reward_name, reward_val in zip(infos['reward_names'], infos['reward_vals']):
+        for reward_name, reward_val in zip(infos['reward_names'], infos['reward_terms']):
             self.logger.record(
                 f"rewards/{reward_name}", reward_val)
 
