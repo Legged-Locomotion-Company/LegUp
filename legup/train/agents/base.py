@@ -23,7 +23,7 @@ class BaseAgent(VecEnv):
     Read the documentation for each of these functions to learn how to implement them!
     """
 
-    def __init__(self, robot: Robot, num_environments: int, asset_path: str, asset_name: str):
+    def __init__(self, robot: Robot, num_environments: int, episode_len:int, asset_path: str, asset_name: str):
         """
         Args:
             num_environments (int): number of parallel environments to create in simulator
@@ -45,6 +45,7 @@ class BaseAgent(VecEnv):
         self.dt = 1. / 60.  # TODO: make this config
         self.max_ep_len = 1000 / self.dt  # TODO: make this config
 
+        self.curriculum_factor = 0.0
 
         # OpenAI Gym Environment required fields
         # TODO: custom observation space/action space bounds, this would help with clipping!
@@ -188,6 +189,9 @@ class BaseAgent(VecEnv):
             environments have terminated/truncated, and additional metadata (currently empty). Observation tensor has shape `(num_envs, observation_space)`
             and all other tensors have shape `(num_envs)`
         """
+
+
+        self.curriculum_factor **= 1-1e-8
         # send actions through the network
         reward, reward_keys, reward_vals = self.make_reward(actions)
 
