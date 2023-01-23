@@ -165,10 +165,6 @@ class CustomWandbCallback(WandbCallback):
         wandb.log(
             {"video": wandb.Video(numpy_video, fps=20, format="gif")})
 
-        infos = self.locals['infos'][0]
-        for idx, name in enumerate(infos['names']):
-            self.logger.record(f"rewards/{name}", infos['terms'][idx].item())
-
         self.model.save(os.path.join(
             self.model_save_path, str(self.num_timesteps)))
 
