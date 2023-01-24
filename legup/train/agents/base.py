@@ -45,7 +45,7 @@ class BaseAgent(VecEnv):
         self.dt = 1. / 60.  # TODO: make this config
         self.max_ep_len = 1000 / self.dt  # TODO: make this config
 
-        self.curriculum_factor = 0.00001
+        self.curriculum_factor = 10**(-curriculum_exponent)
         self.curriculum_exponent = curriculum_exponent
 
         # OpenAI Gym Environment required fields
