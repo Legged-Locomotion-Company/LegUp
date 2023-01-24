@@ -48,6 +48,10 @@ class BaseAgent(VecEnv):
         self.curriculum_factor = 0.00001
         self.curriculum_exponent = curriculum_exponent
 
+        self.commands_lower = torch.tensor([-1, -1, -1], device = self.device)
+        self.commands_upper = torch.tensor([1, 1, 1], device = self.device)
+        self.commands = torch.zeros(self.num_envs, len(self.commands_upper), device = self.device)
+
         # OpenAI Gym Environment required fields
         # TODO: custom observation space/action space bounds, this would help with clipping!
         self.observation_space = gym.spaces.Box(low=np.ones(
@@ -159,8 +163,12 @@ class BaseAgent(VecEnv):
             self.reset_envs(self.term_idx)
             self.env.reset(self.term_idx)
 
-        dones = np.zeros(self.num_envs, dtype=np.bool)
+            # generate random commands in the range [commands_lower, commands_upper] every episode            
+            # adding `out = self.commands[self.term_idx]` doesnt work here for some reason
+            self.commands[self.term_idx] = torch.rand(len(self.term_idx), *self.commands.shape[1:], device = self.device) 
+            self.commands[self.term_idx] = (self.commands_upper - self.commands_lower) * self.commands[self.term_idx] + self.commands_lower
 
+        dones = np.zeros(self.num_envs, dtype=np.bool)
         dones[done_idxs] = True
 
         self.term_idx.clear()
@@ -194,6 +202,7 @@ class BaseAgent(VecEnv):
             and all other tensors have shape `(num_envs)`
         """
 
+        print(self.commands[0])
         self.curriculum_factor **= 1-10**(-self.curriculum_exponent)
         # send actions through the network
         reward, reward_keys, reward_vals = self.make_reward(actions)

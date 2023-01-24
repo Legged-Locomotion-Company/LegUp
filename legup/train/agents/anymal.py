@@ -156,8 +156,7 @@ class AnymalAgent(BaseAgent):
         # TODO: talk to rohan about the command
         # ill work on this - Rohan
 
-        proprio[idx, :3] = torch.tensor([1., 0., 0.]).to(
-            self.device)  # self.command[idx]
+        proprio[idx, :3] = self.commands[idx]
 
         proprio[idx, 3:6] = self.env.get_position()[idx]
         proprio[idx, 6:9] = self.env.get_linear_velocity()[idx]
