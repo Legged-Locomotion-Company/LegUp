@@ -45,7 +45,7 @@ class BaseAgent(VecEnv):
         self.dt = 1. / 60.  # TODO: make this config
         self.max_ep_len = 1000 / self.dt  # TODO: make this config
 
-        self.curriculum_factor = 0.0
+        self.curriculum_factor = 0.00001
         self.curriculum_exponent = curriculum_exponent
 
         # OpenAI Gym Environment required fields
@@ -194,7 +194,6 @@ class BaseAgent(VecEnv):
             and all other tensors have shape `(num_envs)`
         """
 
-
         self.curriculum_factor **= 1-10**(-self.curriculum_exponent)
         # send actions through the network
         reward, reward_keys, reward_vals = self.make_reward(actions)
@@ -220,7 +219,8 @@ class BaseAgent(VecEnv):
         infos = [{}] * self.num_envs
         # reward_keys.append('total_reward')
         # reward_vals.append(sum(reward_vals))
-        infos[0] = {'reward_names': reward_keys, 'reward_terms': reward_vals, 'logs': logs}
+        infos[0] = {'reward_names': reward_keys,
+                    'reward_terms': reward_vals, 'logs': logs}
         return new_obs, reward, dones, infos
 
     def render(self) -> torch.Tensor:
