@@ -23,7 +23,7 @@ class BaseAgent(VecEnv):
     Read the documentation for each of these functions to learn how to implement them!
     """
 
-    def __init__(self, robot: Robot, num_environments: int, asset_path: str, asset_name: str):
+    def __init__(self, robot: Robot, num_environments: int, curriculum_exponent: int, asset_path: str, asset_name: str):
         """
         Args:
             num_environments (int): number of parallel environments to create in simulator
@@ -45,6 +45,8 @@ class BaseAgent(VecEnv):
         self.dt = 1. / 60.  # TODO: make this config
         self.max_ep_len = 1000 / self.dt  # TODO: make this config
 
+        self.curriculum_factor = 0.00001
+        self.curriculum_exponent = curriculum_exponent
 
         # OpenAI Gym Environment required fields
         # TODO: custom observation space/action space bounds, this would help with clipping!
@@ -177,6 +179,9 @@ class BaseAgent(VecEnv):
 
         return self.make_observation()
 
+    def make_logs(self) -> dict:
+        return {}
+
     def step(self, actions: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict]:
         """Does a single step of the simulation environment based on a given command, and computes new state information and rewards
 
@@ -188,6 +193,8 @@ class BaseAgent(VecEnv):
             environments have terminated/truncated, and additional metadata (currently empty). Observation tensor has shape `(num_envs, observation_space)`
             and all other tensors have shape `(num_envs)`
         """
+
+        self.curriculum_factor **= 1-10**(-self.curriculum_exponent)
         # send actions through the network
         reward, reward_keys, reward_vals = self.make_reward(actions)
 
@@ -202,6 +209,8 @@ class BaseAgent(VecEnv):
         # compute new observations and rewards
         new_obs = self.make_observation()
 
+        logs = self.make_logs()
+
         # update tracking info (episodes done, terminated environments)
         self.ep_lens += 1
         self.term_idx = self.get_termination_list(reward)
@@ -210,7 +219,8 @@ class BaseAgent(VecEnv):
         infos = [{}] * self.num_envs
         # reward_keys.append('total_reward')
         # reward_vals.append(sum(reward_vals))
-        infos[0] = {'names': reward_keys, 'terms': reward_vals}
+        infos[0] = {'reward_names': reward_keys,
+                    'reward_terms': reward_vals, 'logs': logs}
         return new_obs, reward, dones, infos
 
     def render(self) -> torch.Tensor:
