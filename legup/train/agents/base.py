@@ -168,6 +168,12 @@ class BaseAgent(VecEnv):
             self.commands[self.term_idx] = torch.rand(len(self.term_idx), *self.commands.shape[1:], device = self.device) 
             self.commands[self.term_idx] = (self.commands_upper - self.commands_lower) * self.commands[self.term_idx] + self.commands_lower
 
+            # make 10% of resets a stand still command (all zeros)
+            zero_command = torch.rand(len(self.term_idx)) < 0.1
+            self.commands[self.term_idx][zero_command] = 0
+
+            print(len(done_idxs), len(self.commands[self.term_idx][zero_command]))
+
         dones = np.zeros(self.num_envs, dtype=np.bool)
         dones[done_idxs] = True
 
@@ -202,7 +208,6 @@ class BaseAgent(VecEnv):
             and all other tensors have shape `(num_envs)`
         """
 
-        print(self.commands[0])
         self.curriculum_factor **= 1-10**(-self.curriculum_exponent)
         # send actions through the network
         reward, reward_keys, reward_vals = self.make_reward(actions)
