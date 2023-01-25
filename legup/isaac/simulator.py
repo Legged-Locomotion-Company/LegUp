@@ -1,4 +1,5 @@
 from isaacgym import gymapi
+import isaacgym.terrain_utils as gymterrain
 
 from typing import List
 import numpy as np
@@ -23,14 +24,44 @@ class SimulatorContext:
         self.device = torch.device("cuda" if use_cuda else "cpu")
 
         self.gym = gymapi.acquire_gym()
-        self.sim = self.create_simulation_environment()
+        self.sim = self.create_simulation_environment(num_environments)
 
         self.asset_handle = self.create_asset(asset_root, asset_path)
         self.env_actor_handles = self.create_envs(self.asset_handle, num_environments)
     
         self.gym.prepare_sim(self.sim)
 
-    def create_simulation_environment(self):
+    def create_ground(self, sim, num_environments, flat = True):
+        if flat:
+            plane_params = gymapi.PlaneParams()
+            plane_params.normal = gymapi.Vec3(0, 0, 1)  # z-up!
+            plane_params.distance = 0
+            plane_params.static_friction = 1
+            plane_params.dynamic_friction = 1
+            plane_params.restitution = 0
+            
+            self.gym.add_ground(sim, plane_params)
+        else:
+            # TODO: move all the params into a config, refactor coming soon so it wont be here for long
+            horiz_scale = 0.25
+            side_len = int(np.sqrt(num_environments) / horiz_scale * 2) + 5            
+
+            subterrain = gymterrain.SubTerrain(width = side_len, length = side_len, vertical_scale = 0.005, horizontal_scale = horiz_scale)
+            gymterrain.random_uniform_terrain(subterrain, min_height = -0.2, max_height = 0.2, step = 0.2, downsampled_scale = 0.5)
+
+            vertices, triangles = gymterrain.convert_heightfield_to_trimesh(subterrain.height_field_raw, horizontal_scale = horiz_scale, vertical_scale = 0.005, slope_threshold = 1.5)
+            tm_params = gymapi.TriangleMeshParams()
+            tm_params.nb_vertices = vertices.shape[0]
+            tm_params.nb_triangles = triangles.shape[0]
+            tm_params.transform.p.x = -1.
+            tm_params.transform.p.y = -1.
+            self.gym.add_triangle_mesh(sim, vertices.flatten(), triangles.flatten(), tm_params)
+
+
+            
+
+
+    def create_simulation_environment(self, num_environments):
         """Creates a basic simulation environment through isaacgym. For now, it only adds the ground plane.
 
         Returns:
@@ -63,15 +94,7 @@ class SimulatorContext:
         # sim_params.physx.always_use_articulations
         sim = self.gym.create_sim(0, 0, gymapi.SIM_PHYSX, sim_params)
 
-        plane_params = gymapi.PlaneParams()
-        plane_params.normal = gymapi.Vec3(0, 0, 1)  # z-up!
-        plane_params.distance = 0
-        plane_params.static_friction = 1
-        plane_params.dynamic_friction = 1
-        plane_params.restitution = 0
-        # plane_params.segmentation_id
-        self.gym.add_ground(sim, plane_params)
-
+        self.create_ground(sim, num_environments)
         return sim
 
     def create_asset(self, asset_root: str, asset_path: str):

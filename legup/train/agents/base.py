@@ -49,9 +49,13 @@ class BaseAgent(VecEnv):
         self.curriculum_factor = 0.00001
         self.curriculum_exponent = curriculum_exponent
 
+        # domain randomization parameters
         self.commands_lower = torch.tensor([-1, -1, -1], device = self.device)
         self.commands_upper = torch.tensor([1, 1, 1], device = self.device)
         self.commands = torch.zeros(self.num_envs, len(self.commands_upper), device = self.device)
+
+        self.obs_noise_mean = 0
+        self.obs_noise_var = 0.1
 
         self.should_push = True
         self.push_freq = 120
@@ -155,6 +159,15 @@ class BaseAgent(VecEnv):
             reset_idx.add(term_idx.item())
 
         return list(reset_idx)
+    
+    def add_noise(self, tensor, noise_mean, noise_var):
+        if type(tensor) == np.ndarray:
+            # why are we returning numpy, keeping this here for a very short time because will refactor to only return torch soon
+            tensor = torch.from_numpy(tensor)
+            tensor = torch.randn_like(tensor) * np.sqrt(noise_var) + noise_mean
+            return tensor.detach().cpu().numpy()
+
+        return torch.randn_like(tensor) * np.sqrt(noise_var) + noise_mean
 
     def reset_partial(self) -> List[int]:
         """Resets a subset of all environments, if they need to be reset
@@ -196,7 +209,7 @@ class BaseAgent(VecEnv):
         self.env.step(None)
         self.env.refresh_buffers()
 
-        return self.make_observation()
+        return self.add_noise(self.make_observation(), self.obs_noise_mean, self.obs_noise_var)
 
     def make_logs(self) -> dict:
         return {}
@@ -212,7 +225,7 @@ class BaseAgent(VecEnv):
             environments have terminated/truncated, and additional metadata (currently empty). Observation tensor has shape `(num_envs, observation_space)`
             and all other tensors have shape `(num_envs)`
         """
-        print(self.ep_lens[0])
+
         self.curriculum_factor **= 1-10**(-self.curriculum_exponent)
         # send actions through the network
         reward, reward_keys, reward_vals = self.make_reward(actions)
@@ -234,7 +247,7 @@ class BaseAgent(VecEnv):
         self.post_physics_step()
 
         # compute new observations and rewards
-        new_obs = self.make_observation()
+        new_obs = self.add_noise(self.make_observation(), self.obs_noise_mean, self.obs_noise_var)
 
         logs = self.make_logs()
 
