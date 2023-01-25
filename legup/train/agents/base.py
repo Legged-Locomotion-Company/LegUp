@@ -1,6 +1,7 @@
+from isaacgym import gymtorch
+
 from legup.isaac.environment import IsaacGymEnvironment
 from legup.robots.Robot import Robot
-from legup.train.rewards.util import HistoryBuffer
 
 from typing import Union, List, Tuple
 
@@ -51,6 +52,12 @@ class BaseAgent(VecEnv):
         self.commands_lower = torch.tensor([-1, -1, -1], device = self.device)
         self.commands_upper = torch.tensor([1, 1, 1], device = self.device)
         self.commands = torch.zeros(self.num_envs, len(self.commands_upper), device = self.device)
+
+        self.should_push = True
+        self.push_freq = 120
+        self.push_vel_lower = torch.tensor([1, 1, 0], device = self.device)
+        self.push_vel_upper = torch.tensor([2, 2, 0], device = self.device)
+        self.push_idx = []
 
         # OpenAI Gym Environment required fields
         # TODO: custom observation space/action space bounds, this would help with clipping!
@@ -172,13 +179,11 @@ class BaseAgent(VecEnv):
             zero_command = torch.rand(len(self.term_idx)) < 0.1
             self.commands[self.term_idx][zero_command] = 0
 
-            print(len(done_idxs), len(self.commands[self.term_idx][zero_command]))
-
         dones = np.zeros(self.num_envs, dtype=np.bool)
         dones[done_idxs] = True
 
         self.term_idx.clear()
-        return dones
+        return dones, list(done_idxs)
 
     def reset(self):
         """Resets all environments, should only be called once at the beginning of training. Undefined behavior if not called only once at the beginning of training
@@ -207,7 +212,7 @@ class BaseAgent(VecEnv):
             environments have terminated/truncated, and additional metadata (currently empty). Observation tensor has shape `(num_envs, observation_space)`
             and all other tensors have shape `(num_envs)`
         """
-
+        print(self.ep_lens[0])
         self.curriculum_factor **= 1-10**(-self.curriculum_exponent)
         # send actions through the network
         reward, reward_keys, reward_vals = self.make_reward(actions)
@@ -216,7 +221,15 @@ class BaseAgent(VecEnv):
         self.env.step(actions)
 
         # reset any terminated environments and update buffers
-        dones = self.reset_partial()
+        dones, done_idxs = self.reset_partial()
+
+        # TODO: move this into reset, refactor coming soon so it wont be here for long
+        idxs = torch.tensor(done_idxs + self.push_idx, device = self.device).int()
+        if len(idxs) > 0:
+            indices = gymtorch.unwrap_tensor(idxs)
+            self.env.gym.set_actor_root_state_tensor_indexed(
+                self.env.sim,  gymtorch.unwrap_tensor(self.env.root_states), indices, len(idxs))
+
         self.env.refresh_buffers()
         self.post_physics_step()
 
@@ -228,6 +241,13 @@ class BaseAgent(VecEnv):
         # update tracking info (episodes done, terminated environments)
         self.ep_lens += 1
         self.term_idx = self.get_termination_list(reward)
+
+        self.push_idx = torch.where(self.ep_lens % self.push_freq == 0)[0].tolist()
+
+        if self.should_push and len(self.push_idx) > 0:
+            push_vel = torch.rand(len(self.push_idx), 3, device = self.device)
+            push_vel = (self.push_vel_upper - self.push_vel_lower) * push_vel + self.push_vel_lower
+            self.env.root_lin_vel[self.push_idx] += push_vel
 
         # TODO: add specific reward information
         infos = [{}] * self.num_envs

@@ -305,5 +305,3 @@ class IsaacGymEnvironment:
         indices = gymtorch.unwrap_tensor(env_index)
         self.gym.set_dof_state_tensor_indexed(
             self.sim,  gymtorch.unwrap_tensor(self.dof_states), indices, len(env_index))
-        self.gym.set_actor_root_state_tensor_indexed(
-            self.sim,  gymtorch.unwrap_tensor(self.root_states), indices, len(env_index))
