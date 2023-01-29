@@ -232,6 +232,7 @@ class AnymalAgent(BaseAgent):
                                                                 self.joint_target_history[:, :, 0],
                                                                 self.joint_target_history[:, :, 1],
                                                                 actions,
+                                                                self.commands,
                                                                 self.curriculum_factor)
 
         return total_reward.cpu(), reward_keys, reward_vals

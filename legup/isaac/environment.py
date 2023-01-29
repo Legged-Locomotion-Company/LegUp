@@ -29,7 +29,7 @@ class IsaacGymEnvironment:
         self.gym = self.ctx.gym
         self.sim = self.ctx.sim
         self.env_actor_handles = self.ctx.env_actor_handles
-        self.camera_env = 8191
+        self.camera_env = 0
         self.device = torch.device("cuda" if use_cuda else "cpu")
 
         self.all_env_index = torch.Tensor(
