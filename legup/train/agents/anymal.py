@@ -203,8 +203,7 @@ class AnymalAgent(BaseAgent):
         if torch.any(torch.isnan(obs)):
             self.dump_log()
 
-        # return (torch.cat([proprio, extro, privil], dim=1)[idx]).cpu().numpy()
-        return (torch.cat([proprio, extro, privil], dim=1)[idx])
+        return (torch.cat([proprio, extro, privil], dim=1)[idx]).cpu().numpy()
 
     def make_actions(self, actions: torch.Tensor) -> torch.Tensor:
 
