@@ -8,6 +8,7 @@ import numpy as np
 import torch
 import pytorch3d.transforms.rotation_conversions as R
 
+
 class IsaacGymEnvironment:
     """Interfaces with IsaacGym to handle all of the simulation, and provides an API to get simulation properties and move the robot.
     This implementation creates a number of parallel environments, and adds one agent/robot to each environment.
@@ -131,7 +132,6 @@ class IsaacGymEnvironment:
         self.print_nan(self.net_contact_forces, 'NET_CONTACT')
         self.print_nan(self.rb_states, 'RB_STATES')
 
-
     def get_position(self) -> torch.Tensor:
         """Gets the root position of each robot
 
@@ -254,7 +254,7 @@ class IsaacGymEnvironment:
                 actions = torch.from_numpy(actions).to(self.device)
             if isinstance(actions, torch.Tensor):
                 actions = gymtorch.unwrap_tensor(actions)
-            
+
         else:
             actions = gymtorch.unwrap_tensor(self.command_dof_pos)
 

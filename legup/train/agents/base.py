@@ -47,6 +47,7 @@ class BaseAgent(VecEnv):
         self.max_ep_len = 1000 / self.dt  # TODO: make this config
 
         self.curriculum_factor = 10**(-curriculum_exponent)
+        # self.env_curriculum_factor
         self.curriculum_exponent = curriculum_exponent
 
         # domain randomization parameters
@@ -188,19 +189,34 @@ class BaseAgent(VecEnv):
         """
         result = torch.zeros((count, 3), device=self.device)
 
+        ang_range = (self.command_ang_upper -
+                     self.command_ang_lower) * self.curriculum_factor
+        ang_avg = (self.command_ang_upper + self.command_ang_lower) / 2
+        ang_upper = ang_avg + ang_range / 2
+        ang_lower = ang_avg - ang_range / 2
+
+        mag_range = (self.command_mag_upper -
+                     self.command_mag_lower) * self.curriculum_factor
+        mag_avg = (self.command_mag_upper + self.command_mag_lower) / 2
+        mag_upper = mag_avg + mag_range / 2
+        mag_lower = mag_avg - mag_range / 2
+
+        ang_vel_range = (self.command_ang_vel_upper -
+                         self.command_ang_vel_lower) * self.curriculum_factor
+        ang_vel_avg = (self.command_ang_vel_upper +
+                       self.command_ang_vel_lower) / 2
+        ang_vel_upper = ang_vel_avg + ang_vel_range / 2
+        ang_vel_lower = ang_vel_avg - ang_vel_range / 2
+
         # use idx 0 as scratch space
         command_angles_scratch = result[:, 0]
         # generate random angle commands and write into scratch space
-        command_angles_scratch.uniform_(
-            self.command_ang_lower, self.command_ang_upper)
+        command_angles_scratch.uniform_(ang_lower, ang_upper)
         # write cos and sin of angle commands into commands tensor
-        torch.cos(command_angles_scratch,
-                  out=result[:, 1])
-        torch.sin(command_angles_scratch,
-                  out=result[:, 2])
+        torch.cos(command_angles_scratch, out=result[:, 1])
+        torch.sin(command_angles_scratch, out=result[:, 2])
         # generate random magnitude commands and write into scratch space
-        command_angles_scratch.uniform_(
-            self.command_mag_lower, self.command_mag_upper)
+        command_angles_scratch.uniform_(mag_lower, mag_upper)
         # multiply cos and sin by magnitude commands and write into commands tensor
         result[:, 1] *= command_angles_scratch
         result[:, 2] *= command_angles_scratch
@@ -208,8 +224,7 @@ class BaseAgent(VecEnv):
         # use idx 0 as scratch space
         command_ang_vel_scratch = result[:, 0]
         # generate random anglular velocity commands
-        command_ang_vel_scratch.uniform_(
-            self.command_ang_vel_lower, self.command_ang_vel_upper)
+        command_ang_vel_scratch.uniform_(ang_vel_lower, ang_vel_upper)
         # write scratch into tensor (they are the same but I think this is clearer)
         result[:, 0] = command_ang_vel_scratch
 
@@ -243,7 +258,8 @@ class BaseAgent(VecEnv):
             self.reset_envs(self.term_idx)
             self.env.reset(self.term_idx)
 
-            self.commands[self.term_idx] = self.create_random_commands(len(done_idxs))
+            self.commands[self.term_idx] = self.create_random_commands(
+                len(done_idxs))
 
             # generate random commands in the range [commands_lower, commands_upper] every episode
             # adding `out = self.commands[self.term_idx]` doesnt work here for some reason

@@ -57,7 +57,7 @@ def train_ppo(cfg: DictConfig, root_path: str):
 
     model = PPO(CustomTeacherActorCriticPolicy, env, tensorboard_log='./concurrent_training_tb', verbose=1,
                 batch_size=cfg.environment.batch_size, n_steps=cfg.environment.n_steps, n_epochs=cfg.environment.n_epochs, ent_coef=cfg.environment.entropy_coef,
-                learning_rate=cfg.environment.learning_rate, clip_range=cfg.environment.clip_range, gae_lambda=cfg.environment.gae_lambda, gamma=cfg.environment.discount, vf_coef=cfg.environment.value_coef)
+                learning_rate=cfg.environment.learning_rate, clip_range=cfg.environment.clip_range, gae_lambda=cfg.environment.gae_lambda, gamma=cfg.environment.discount, vf_coef=cfg.environment.value_coef, use_sde=True)
 
     run_training(model, total_timesteps, cfg=cfg, callback=cb,
                  wandb_wrapper=wandb_wrapper, resume=False, log_dump_func=env.dump_log)
@@ -86,29 +86,29 @@ def run_training(model, total_timesteps, callback, cfg, id=None, wandb_wrapper=N
     # save the start time so that we know how long between exceptions
     start_time = time.time()
 
-    try:
-        model.learn(total_timesteps=total_timesteps, callback=callback)
-    except Exception as e:
-        except_time = time.time()
+    # try:
+    model.learn(total_timesteps=total_timesteps, callback=callback)
+    # except Exception as e:
+    #     except_time = time.time()
 
-        new_retry_count = retry_count + 1
+    #     new_retry_count = retry_count + 1
 
-        elapsed = except_time - start_time
+    #     elapsed = except_time - start_time
 
-        # if no exception has occurred for 5 minutes, reset the retry count
-        if elapsed > 300:
-            new_retry_count = 0
+    #     # if no exception has occurred for 5 minutes, reset the retry count
+    #     if elapsed > 300:
+    #         new_retry_count = 0
 
-        print(
-            f"Caught exception #{new_retry_count} during training after {elapsed} seconds.")
-        print(f"Exception: {e}")
-        if log_dump_func is not None:
-            print("Log dump:")
-            log_dump_func()
-        print("Retrying training...")
+    #     print(
+    #         f"Caught exception #{new_retry_count} during training after {elapsed} seconds.")
+    #     print(f"Exception: {e}")
+    #     if log_dump_func is not None:
+    #         print("Log dump:")
+    #         log_dump_func()
+    #     print("Retrying training...")
 
-        run_training(model, total_timesteps=total_timesteps, callback=callback, cfg=cfg,
-                     id=id, wandb_wrapper=wandb_wrapper, retry_count=new_retry_count, resume=True, log_dump_func=log_dump_func)
+    #     run_training(model, total_timesteps=total_timesteps, callback=callback, cfg=cfg,
+    #                  id=id, wandb_wrapper=wandb_wrapper, retry_count=new_retry_count, resume=True, log_dump_func=log_dump_func)
 
 # Runs the agent based on a saved model
 

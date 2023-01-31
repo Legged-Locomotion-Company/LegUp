@@ -27,7 +27,8 @@ class AnymalAgent(BaseAgent):
             train_cfg (DictConfig): Configuration dictionary for training
         """
 
-        super().__init__(robot_cfg, num_environments, curriculum_exponent, asset_path, asset_name)
+        super().__init__(robot_cfg, num_environments,
+                         curriculum_exponent, asset_path, asset_name)
 
         # need more stuff for reward function like train config
         self.dt = 1/60
@@ -202,15 +203,20 @@ class AnymalAgent(BaseAgent):
         if torch.any(torch.isnan(obs)):
             self.dump_log()
 
-        return (torch.cat([proprio, extro, privil], dim=1)[idx]).cpu().numpy()
+        # return (torch.cat([proprio, extro, privil], dim=1)[idx]).cpu().numpy()
+        return (torch.cat([proprio, extro, privil], dim=1)[idx])
 
     def make_actions(self, actions: torch.Tensor) -> torch.Tensor:
 
         if isinstance(actions, np.ndarray):
             actions = torch.tensor(actions).to(self.device)
 
-        pos_delta_clip = self.train_cfg.pos_delta_clip * (self.curriculum_factor * (1-self.train_cfg.clip_bias) + self.train_cfg.clip_bias)
-        phase_delta_clip = self.train_cfg.phase_delta_clip * (self.curriculum_factor * (1-self.train_cfg.clip_bias) + self.train_cfg.clip_bias)
+        pos_delta_clip = self.train_cfg.pos_delta_clip * \
+            (self.curriculum_factor *
+             (1-self.train_cfg.clip_bias) + self.train_cfg.clip_bias)
+        phase_delta_clip = self.train_cfg.phase_delta_clip * \
+            (self.curriculum_factor *
+             (1-self.train_cfg.clip_bias) + self.train_cfg.clip_bias)
 
         actions[0:12] = actions[0:12].clip(
             max=pos_delta_clip, min=-pos_delta_clip)
@@ -227,7 +233,7 @@ class AnymalAgent(BaseAgent):
     def make_reward(self, actions: torch.Tensor) -> torch.Tensor:
         if isinstance(actions, np.ndarray):
             actions = torch.tensor(actions).to(self.device)
-        
+
         total_reward, reward_keys, reward_vals = self.reward_fn(self.joint_vel_history[:, :, 0],
                                                                 self.joint_target_history[:, :, 0],
                                                                 self.joint_target_history[:, :, 1],
@@ -236,7 +242,7 @@ class AnymalAgent(BaseAgent):
                                                                 self.curriculum_factor)
 
         return total_reward.cpu(), reward_keys, reward_vals
-    
+
     def make_logs(self) -> dict:
         return {"curriculum_factor": self.curriculum_factor}
 
