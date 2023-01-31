@@ -251,7 +251,7 @@ class BaseAgent(VecEnv):
             List[int]: idxs of environments that were reset
         """
 
-        done_idxs = np.array(self.term_idx, dtype=np.int32)
+        done_idxs = torch.tensor(self.term_idx, dtype=torch.long)
 
         if len(done_idxs) > 0:
             self.ep_lens[self.term_idx] = 0
@@ -269,7 +269,8 @@ class BaseAgent(VecEnv):
             # self.commands[self.term_idx] = (
             #     self.commands_upper - self.commands_lower) * self.commands[self.term_idx] + self.commands_lower
 
-        dones = np.zeros(self.num_envs, dtype=np.bool)
+        dones = torch.zeros(
+            self.num_envs, dtype=torch.bool, device=self.device)
         dones[done_idxs] = True
 
         self.term_idx.clear()

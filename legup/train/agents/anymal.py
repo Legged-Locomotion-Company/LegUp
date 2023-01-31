@@ -203,7 +203,8 @@ class AnymalAgent(BaseAgent):
         if torch.any(torch.isnan(obs)):
             self.dump_log()
 
-        return (torch.cat([proprio, extro, privil], dim=1)[idx]).cpu().numpy()
+        # return (torch.cat([proprio, extro, privil], dim=1)[idx]).cpu().numpy()
+        return (torch.cat([proprio, extro, privil], dim=1)[idx])
 
     def make_actions(self, actions: torch.Tensor) -> torch.Tensor:
 
@@ -240,7 +241,7 @@ class AnymalAgent(BaseAgent):
                                                                 self.commands,
                                                                 self.curriculum_factor)
 
-        return total_reward.cpu(), reward_keys, reward_vals
+        return total_reward, reward_keys, reward_vals
 
     def make_logs(self) -> dict:
         return {"curriculum_factor": self.curriculum_factor}
