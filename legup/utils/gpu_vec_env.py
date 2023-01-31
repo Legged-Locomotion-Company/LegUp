@@ -4,6 +4,8 @@ import torch
 
 # Wrapper for ConcurrentTrainingEnv to convert returned torch tensors to numpy and input numpy arrays to torch tensors
 # TODO: generalize it to not just the `ConcurrentTrainingEnv` environment
+
+
 class GPUVecEnv(AnymalAgent):
     def step(self, actions):
         actions = torch.from_numpy(actions).cuda()

@@ -7,7 +7,8 @@ import gym
 import numpy as np
 import torch
 
-from stable_baselines3.common import utils
+# from stable_baselines3.common import utils
+from gpu_gym import gpu_utils as utils
 # from stable_baselines3.common.running_mean_std import RunningMeanStd
 from gpu_gym.gpu_running_mean_std import GPURunningMeanStd as RunningMeanStd
 from stable_baselines3.common.vec_env.base_vec_env import VecEnv, VecEnvStepReturn, VecEnvWrapper

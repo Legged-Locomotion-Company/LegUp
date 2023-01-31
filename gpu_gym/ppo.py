@@ -10,7 +10,8 @@ from torch.nn import functional as F
 from gpu_gym.gpu_on_policy_algorithm import GPUOnPolicyAlgorithm
 from stable_baselines3.common.policies import ActorCriticCnnPolicy, ActorCriticPolicy, MultiInputActorCriticPolicy, BasePolicy
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule
-from stable_baselines3.common.utils import explained_variance, get_schedule_fn
+# from stable_baselines3.common.utils import explained_variance, get_schedule_fn
+from gpu_gym.gpu_utils import explained_variance, get_schedule_fn
 
 PPOSelf = TypeVar("PPOSelf", bound="GPUPPO")
 
@@ -269,7 +270,7 @@ class GPUPPO(GPUOnPolicyAlgorithm):
                 with th.no_grad():
                     log_ratio = log_prob - rollout_data.old_log_prob
                     approx_kl_div = th.mean(
-                        (th.exp(log_ratio) - 1) - log_ratio).cpu().numpy()
+                        (th.exp(log_ratio) - 1) - log_ratio)
                     approx_kl_divs.append(approx_kl_div)
 
                 if self.target_kl is not None and approx_kl_div > 1.5 * self.target_kl:
@@ -295,13 +296,18 @@ class GPUPPO(GPUOnPolicyAlgorithm):
             self.rollout_buffer.values.flatten(), self.rollout_buffer.returns.flatten())
 
         # Logs
-        self.logger.record("train/entropy_loss", th.mean(entropy_losses))
-        self.logger.record("train/policy_gradient_loss", th.mean(pg_losses))
-        self.logger.record("train/value_loss", th.mean(value_losses))
-        self.logger.record("train/approx_kl", th.mean(approx_kl_divs))
-        self.logger.record("train/clip_fraction", th.mean(clip_fractions))
+        self.logger.record("train/entropy_loss",
+                           th.mean(th.tensor(entropy_losses)))
+        self.logger.record("train/policy_gradient_loss",
+                           th.mean(th.tensor(pg_losses)))
+        self.logger.record("train/value_loss",
+                           th.mean(th.tensor(value_losses)))
+        self.logger.record("train/approx_kl",
+                           th.mean(th.tensor(approx_kl_divs)))
+        self.logger.record("train/clip_fraction",
+                           th.mean(th.tensor(clip_fractions)))
         self.logger.record("train/loss", loss.item())
-        self.logger.record("train/explained_variance", explained_var)
+        self.logger.record("train/explained_variance", explained_var.item())
         if hasattr(self.policy, "log_std"):
             self.logger.record(
                 "train/std", th.exp(self.policy.log_std).mean().item())

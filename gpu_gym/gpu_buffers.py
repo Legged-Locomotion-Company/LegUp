@@ -13,7 +13,8 @@ from stable_baselines3.common.type_aliases import (
     ReplayBufferSamples,
     RolloutBufferSamples,
 )
-from stable_baselines3.common.utils import get_device
+# from stable_baselines3.common.utils import get_device
+from gpu_gym.gpu_utils import get_device
 # from stable_baselines3.common.vec_env import VecNormalize
 from gpu_gym.gpu_vec_normalize import GPUVecNormalize as VecNormalize
 
