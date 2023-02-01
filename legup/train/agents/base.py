@@ -66,12 +66,15 @@ class BaseAgent(VecEnv):
         self.commands = torch.zeros((self.num_envs, 3), device=self.device)
 
         self.obs_noise_mean = 0
-        self.obs_noise_var = 0.1
+        # self.obs_noise_var = 0.1
+        self.obs_noise_var = 0.0
 
         self.should_push = True
         self.push_freq = 120
-        self.push_vel_lower = torch.tensor([1, 1, 0], device=self.device)
-        self.push_vel_upper = torch.tensor([2, 2, 0], device=self.device)
+        self.push_vel_lower = torch.tensor(
+            [1, 1, 0.25], device=self.device, dtype=torch.float)
+        self.push_vel_upper = torch.tensor(
+            [2, 2, 0], device=self.device, dtype=torch.float)
         self.push_idx = []
 
         # OpenAI Gym Environment required fields
@@ -166,19 +169,17 @@ class BaseAgent(VecEnv):
             reset_idx.add(term_idx.item())
 
         for term_idx in torch.where(term)[0]:
-            reward[term_idx] = -10  # TODO: add a config for this
+            reward[term_idx] = -1e2  # TODO: add a config for this
             reset_idx.add(term_idx.item())
 
         return list(reset_idx)
 
     def add_noise(self, tensor, noise_mean, noise_var):
-        if type(tensor) == np.ndarray:
+        if isinstance(tensor, np.ndarray):
             # why are we returning numpy, keeping this here for a very short time because will refactor to only return torch soon
-            tensor = torch.from_numpy(tensor)
-            tensor = torch.randn_like(tensor) * np.sqrt(noise_var) + noise_mean
-            return tensor.detach().cpu().numpy()
+            return tensor + (np.random.randn(*tensor.shape) * np.sqrt(noise_var) + noise_mean)
 
-        return torch.randn_like(tensor) * np.sqrt(noise_var) + noise_mean
+        return tensor + (torch.randn_like(tensor) * np.sqrt(noise_var) + noise_mean)
 
     def create_random_commands(self, count: int) -> torch.Tensor:
         """Randomizes the commands for the agents
@@ -243,7 +244,8 @@ class BaseAgent(VecEnv):
             self.reset_envs(self.term_idx)
             self.env.reset(self.term_idx)
 
-            self.commands[self.term_idx] = self.create_random_commands(len(done_idxs))
+            self.commands[self.term_idx] = self.create_random_commands(
+                len(done_idxs))
 
             # generate random commands in the range [commands_lower, commands_upper] every episode
             # adding `out = self.commands[self.term_idx]` doesnt work here for some reason
@@ -282,7 +284,7 @@ class BaseAgent(VecEnv):
             actions (torch.Tensor): Commanded joint position, shape `(num_envs, num_degrees_of_freedom)`
 
         Returns:
-            Tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict]: new observation, corresponding reward, truthy tensor of which 
+            Tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict]: new observation, corresponding reward, truthy tensor of which
             environments have terminated/truncated, and additional metadata (currently empty). Observation tensor has shape `(num_envs, observation_space)`
             and all other tensors have shape `(num_envs)`
         """
