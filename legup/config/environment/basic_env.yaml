@@ -8,7 +8,7 @@ entropy_coef: 0.001
 value_coef: 0.5
 learning_rate: 0.0005
 gae_lambda: 0.95
-discount: 0.99
+discount: 0.9995
 clip_range: 0.2
 verbose: 1
 curriculum_exponent: 4
