@@ -103,7 +103,8 @@ class GPUBaseBuffer(ABC):
         :return:
         """
         upper_bound = self.buffer_size if self.full else self.pos
-        batch_inds = np.random.randint(0, upper_bound, size=batch_size)
+        batch_inds = th.randint(
+            0, upper_bound, size=batch_size, device=self.device)
         return self._get_samples(batch_inds, env=env)
 
     @abstractmethod
@@ -130,22 +131,37 @@ class GPUBaseBuffer(ABC):
         # if copy:
         #     return th.tensor(array).to(self.device)
         # return th.as_tensor(array).to(self.device)
-        return array
+        if copy:
+            return array.clone().to(self.device)
+        else:
+            return array.to(self.device)
 
     @staticmethod
     def _normalize_obs(
         obs: Union[th.Tensor, Dict[str, th.Tensor]],
         env: Optional[VecNormalize] = None,
-    ) -> Union[th.Tensor, Dict[str, th.Tensor]]:
+        out: Optional[Union[th.Tensor, Dict[str, th.Tensor]]] = None,
+    ) -> Optional[Union[th.Tensor, Dict[str, th.Tensor]]]:
         if env is not None:
             return env.normalize_obs(obs)
         return obs
 
     @staticmethod
-    def _normalize_reward(reward: th.Tensor, env: Optional[VecNormalize] = None) -> th.Tensor:
-        if env is not None:
-            return env.normalize_reward(reward).type(th.float32)
-        return reward
+    def _normalize_reward(reward: th.Tensor, env: Optional[VecNormalize] = None, out: Optional[th.Tensor] = None) -> Optional[th.Tensor]:
+        if out is not None:
+            if env is not None:
+                env.normalize_reward(reward, out=out)
+                # TODO check if this is needed, it seems slow
+                out = out.type(th.float32)
+                return
+            else:
+                out.set_(reward)
+                return
+        else:
+            if env is not None:
+                return env.normalize_reward(reward).type(th.float32)
+            else:
+                return reward
 
 
 class GPURolloutBuffer(GPUBaseBuffer):
@@ -191,6 +207,8 @@ class GPURolloutBuffer(GPUBaseBuffer):
         self.reset()
 
     def reset(self) -> None:
+
+        # TODO check to see if we can just zero the tensors instead of remaking them
 
         self.observations = th.zeros(
             (self.buffer_size, self.n_envs) + self.obs_shape, dtype=th.float32, device=self.device)

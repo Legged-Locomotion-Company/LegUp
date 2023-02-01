@@ -189,23 +189,36 @@ class GPUVecNormalize(VecEnvWrapper):
         self.returns = self.returns * self.gamma + reward
         self.ret_rms.update(self.returns)
 
-    def _normalize_obs(self, obs: torch.Tensor, obs_rms: RunningMeanStd) -> torch.Tensor:
+    def _normalize_obs(self, obs: torch.Tensor, obs_rms: RunningMeanStd, out: torch.Tensor = None) -> torch.Tensor:
         """
         Helper to normalize observation.
         :param obs:
         :param obs_rms: associated statistics
         :return: normalized observation
         """
-        return torch.clamp((obs - obs_rms.mean) / torch.sqrt(obs_rms.var + self.epsilon), -self.clip_obs, self.clip_obs)
+        if out is not None:
+            torch.add(obs_rms.var, self.epsilon, out=out)
+            out.sqrt_()
+            torch.divide(obs - obs_rms.mean, out, out=out)
+            out.clamp_(min=-self.clip_obs, max=self.clip_obs)
+            return
+        else:
+            return torch.clamp((obs - obs_rms.mean) / torch.sqrt(obs_rms.var + self.epsilon), -self.clip_obs, self.clip_obs)
         # return np.clip((obs - obs_rms.mean) / np.sqrt(obs_rms.var + self.epsilon), -self.clip_obs, self.clip_obs)
 
-    def _unnormalize_obs(self, obs: torch.Tensor, obs_rms: RunningMeanStd) -> torch.Tensor:
+    def _unnormalize_obs(self, obs: torch.Tensor, obs_rms: RunningMeanStd, out: torch.Tensor = None) -> torch.Tensor:
         """
         Helper to unnormalize observation.
         :param obs:
         :param obs_rms: associated statistics
         :return: unnormalized observation
         """
+        if out is not None:
+            torch.add(obs_rms.var, self.epsilon, out=out)
+            out.sqrt_()
+            out.mul_(obs)
+            out.add_(obs_rms.mean)
+            return
         return (obs * torch.sqrt(obs_rms.var + self.epsilon)) + obs_rms.mean
         # return (obs * np.sqrt(obs_rms.var + self.epsilon)) + obs_rms.mean
 
@@ -213,6 +226,7 @@ class GPUVecNormalize(VecEnvWrapper):
         """
         Normalize observations using this GPUVecNormalize's observations statistics.
         Calling this method does not update statistics.
+        WARNING: copies the data
         """
         # Avoid modifying by reference the original object
         obs_ = deepcopy(obs)
@@ -220,46 +234,73 @@ class GPUVecNormalize(VecEnvWrapper):
             if isinstance(obs, dict) and isinstance(self.obs_rms, dict):
                 # Only normalize the specified keys
                 for key in self.norm_obs_keys:
-                    obs_[key] = self._normalize_obs(
-                        obs[key], self.obs_rms[key]).type(torch.float32)
+                    if key in obs_:
+                        self._normalize_obs(
+                            obs[key], self.obs_rms[key], out=obs_[key])
+                        # TODO check on this type conversion, could be slow
+                        obs_[key] = obs_[key].type(torch.float32)
+                    else:
+                        obs_[key] = self._normalize_obs(
+                            obs[key], self.obs_rms[key]).type(torch.float32)
             else:
-                obs_ = self._normalize_obs(
-                    obs, self.obs_rms).type(torch.float32)
+                self._normalize_obs(
+                    obs, self.obs_rms, out=obs_)
+                obs_ = obs_.type(torch.float32)
+
         return obs_
 
-    def normalize_reward(self, reward: torch.Tensor) -> torch.Tensor:
+    def normalize_reward(self, reward: torch.Tensor, out=torch.Tensor) -> torch.Tensor:
         """
         Normalize rewards using this GPUVecNormalize's rewards statistics.
         Calling this method does not update statistics.
         """
         if self.norm_reward:
-            reward = torch.clamp(reward / torch.sqrt(self.ret_rms.var +
-                                                     self.epsilon), -self.clip_reward, self.clip_reward)
+            if out is not None:
+                torch.add(self.ret_rms.var, self.epsilon, out=out)
+                out.sqrt_()
+                torch.divide(reward, out, out=out)
+                out.clamp_(min=-self.clip_reward, max=self.clip_reward)
+                return
+            else:
+                reward = torch.clamp(reward / torch.sqrt(self.ret_rms.var +
+                                                         self.epsilon), -self.clip_reward, self.clip_reward)
+
             # reward = np.clip(reward / np.sqrt(self.ret_rms.var +
             #                  self.epsilon), -self.clip_reward, self.clip_reward)
+        if out is not None:
+            out.set_(reward)
+            return
         return reward
 
     def unnormalize_obs(self, obs: Union[torch.Tensor, Dict[str, torch.Tensor]]) -> Union[torch.Tensor, Dict[str, torch.Tensor]]:
-        # Avoid modifying by reference the original object
+        # Avoid modifying by reference the original object WARNING: copies the data
         obs_ = deepcopy(obs)
         if self.norm_obs:
             if isinstance(obs, dict) and isinstance(self.obs_rms, dict):
                 for key in self.norm_obs_keys:
-                    obs_[key] = self._unnormalize_obs(
-                        obs[key], self.obs_rms[key])
+                    self._unnormalize_obs(
+                        obs[key], self.obs_rms[key], out=obs_[key])
             else:
-                obs_ = self._unnormalize_obs(obs, self.obs_rms)
+                obs_ = self._unnormalize_obs(obs, self.obs_rms, out=obs_)
         return obs_
 
-    def unnormalize_reward(self, reward: torch.Tensor) -> torch.Tensor:
+    def unnormalize_reward(self, reward: torch.Tensor, out: torch.Tensor = None) -> torch.Tensor:
         if self.norm_reward:
+            if out is not None:
+                torch.add(self.ret_rms.var, self.epsilon, out=out)
+                out.sqrt_()
+                out.mul_(reward)
+                return
             return reward * torch.sqrt(self.ret_rms.var + self.epsilon)
+        if out is not None:
+            out.set_(reward)
+            return
         return reward
 
     def get_original_obs(self) -> Union[torch.Tensor, Dict[str, torch.Tensor]]:
         """
         Returns an unnormalized version of the observations from the most recent
-        step or reset.
+        step or reset. WARNING: copies the data.
         """
         return deepcopy(self.old_obs)
 

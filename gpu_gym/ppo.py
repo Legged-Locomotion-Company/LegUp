@@ -326,7 +326,7 @@ class GPUPPO(GPUOnPolicyAlgorithm):
         eval_env: Optional[GymEnv] = None,
         eval_freq: int = -1,
         n_eval_episodes: int = 5,
-        tb_log_name: str = "GPU_PPO",
+        tb_log_name: str = "GPUPPO",
         eval_log_path: Optional[str] = None,
         reset_num_timesteps: bool = True,
         progress_bar: bool = False,
