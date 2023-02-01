@@ -170,7 +170,7 @@ class BaseAgent(VecEnv):
             reset_idx.add(term_idx.item())
 
         for term_idx in torch.where(term)[0]:
-            reward[term_idx] = -1e2  # TODO: add a config for this
+            reward[term_idx] = -10  # TODO: add a config for this
             reset_idx.add(term_idx.item())
 
         return list(reset_idx)
