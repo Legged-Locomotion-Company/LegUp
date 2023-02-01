@@ -1,6 +1,7 @@
+from isaacgym import gymtorch
+
 from legup.isaac.environment import IsaacGymEnvironment
 from legup.robots.Robot import Robot
-from legup.train.rewards.util import HistoryBuffer
 
 from typing import Union, List, Tuple
 
@@ -47,6 +48,34 @@ class BaseAgent(VecEnv):
 
         self.curriculum_factor = 10**(-curriculum_exponent)
         self.curriculum_exponent = curriculum_exponent
+
+        # domain randomization parameters
+
+        # linear velocity command limits in meters per second
+        self.command_mag_lower = torch.tensor(0., device=self.device)
+        self.command_mag_upper = torch.tensor(2., device=self.device)
+
+        # angular velocity command limits in radians per second
+        self.command_ang_vel_lower = torch.tensor(-1., device=self.device)
+        self.command_ang_vel_upper = torch.tensor(1., device=self.device)
+
+        # angle limits for robot linear command wrt the robot frame
+        self.command_ang_lower = torch.tensor(-torch.pi, device=self.device)
+        self.command_ang_upper = torch.tensor(torch.pi, device=self.device)
+
+        self.commands = torch.zeros((self.num_envs, 3), device=self.device)
+
+        self.obs_noise_mean = 0
+        # self.obs_noise_var = 0.1
+        self.obs_noise_var = 0.0
+
+        self.should_push = True
+        self.push_freq = 120
+        self.push_vel_lower = torch.tensor(
+            [1, 1, 0.25], device=self.device, dtype=torch.float)
+        self.push_vel_upper = torch.tensor(
+            [2, 2, 0], device=self.device, dtype=torch.float)
+        self.push_idx = []
 
         # OpenAI Gym Environment required fields
         # TODO: custom observation space/action space bounds, this would help with clipping!
@@ -140,10 +169,66 @@ class BaseAgent(VecEnv):
             reset_idx.add(term_idx.item())
 
         for term_idx in torch.where(term)[0]:
-            reward[term_idx] = -10  # TODO: add a config for this
+            reward[term_idx] = -1e2  # TODO: add a config for this
             reset_idx.add(term_idx.item())
 
         return list(reset_idx)
+
+    def add_noise(self, tensor, noise_mean, noise_var):
+        if isinstance(tensor, np.ndarray):
+            # why are we returning numpy, keeping this here for a very short time because will refactor to only return torch soon
+            return tensor + (np.random.randn(*tensor.shape) * np.sqrt(noise_var) + noise_mean)
+
+        return tensor + (torch.randn_like(tensor) * np.sqrt(noise_var) + noise_mean)
+
+    def create_random_commands(self, count: int) -> torch.Tensor:
+        """Randomizes the commands for the agents
+
+        Args:
+            idxs (Union[torch.Tensor, List[int], int]): idxs of environments whose commands should be randomized
+        """
+        result = torch.zeros((count, 3), device=self.device)
+
+        # use idx 0 as scratch space
+        command_angles_scratch = result[:, 0]
+        # generate random angle commands and write into scratch space
+        command_angles_scratch.uniform_(
+            self.command_ang_lower, self.command_ang_upper)
+        # write cos and sin of angle commands into commands tensor
+        torch.cos(command_angles_scratch,
+                  out=result[:, 1])
+        torch.sin(command_angles_scratch,
+                  out=result[:, 2])
+        # generate random magnitude commands and write into scratch space
+        command_angles_scratch.uniform_(
+            self.command_mag_lower, self.command_mag_upper)
+        # multiply cos and sin by magnitude commands and write into commands tensor
+        result[:, 1] *= command_angles_scratch
+        result[:, 2] *= command_angles_scratch
+
+        # use idx 0 as scratch space
+        command_ang_vel_scratch = result[:, 0]
+        # generate random anglular velocity commands
+        command_ang_vel_scratch.uniform_(
+            self.command_ang_vel_lower, self.command_ang_vel_upper)
+        # write scratch into tensor (they are the same but I think this is clearer)
+        result[:, 0] = command_ang_vel_scratch
+
+        # now make some of the commands zero
+
+        # make 4% of resets a stand still command (all zeros)
+        stand_still_command = torch.rand(count, device=self.device) < 0.04
+        result[stand_still_command, :] = 0
+
+        # make 3% of resets a no turn command (command[:, 0] = 0)
+        zero_turn_command = torch.rand(count, device=self.device) < 0.03
+        result[zero_turn_command, 0] = 0
+
+        # make 3% of resets an only turn command (command:, 1:] = 0)
+        only_turn_command = torch.rand(count, device=self.device) < 0.03
+        result[only_turn_command, 1:] = 0
+
+        return result
 
     def reset_partial(self) -> List[int]:
         """Resets a subset of all environments, if they need to be reset
@@ -159,12 +244,14 @@ class BaseAgent(VecEnv):
             self.reset_envs(self.term_idx)
             self.env.reset(self.term_idx)
 
-        dones = np.zeros(self.num_envs, dtype=np.bool)
+            self.commands[self.term_idx] = self.create_random_commands(
+                len(done_idxs))
 
+        dones = np.zeros(self.num_envs, dtype=np.bool)
         dones[done_idxs] = True
 
         self.term_idx.clear()
-        return dones
+        return dones, list(done_idxs)
 
     def reset(self):
         """Resets all environments, should only be called once at the beginning of training. Undefined behavior if not called only once at the beginning of training
@@ -177,7 +264,7 @@ class BaseAgent(VecEnv):
         self.env.step(None)
         self.env.refresh_buffers()
 
-        return self.make_observation()
+        return self.add_noise(self.make_observation(), self.obs_noise_mean, self.obs_noise_var)
 
     def make_logs(self) -> dict:
         return {}
@@ -189,7 +276,7 @@ class BaseAgent(VecEnv):
             actions (torch.Tensor): Commanded joint position, shape `(num_envs, num_degrees_of_freedom)`
 
         Returns:
-            Tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict]: new observation, corresponding reward, truthy tensor of which 
+            Tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict]: new observation, corresponding reward, truthy tensor of which
             environments have terminated/truncated, and additional metadata (currently empty). Observation tensor has shape `(num_envs, observation_space)`
             and all other tensors have shape `(num_envs)`
         """
@@ -202,18 +289,38 @@ class BaseAgent(VecEnv):
         self.env.step(actions)
 
         # reset any terminated environments and update buffers
-        dones = self.reset_partial()
+        dones, done_idxs = self.reset_partial()
+
+        # TODO: move this into reset, refactor coming soon so it wont be here for long
+        idxs = torch.tensor(done_idxs + self.push_idx,
+                            device=self.device).int()
+        if len(idxs) > 0:
+            indices = gymtorch.unwrap_tensor(idxs)
+            self.env.gym.set_actor_root_state_tensor_indexed(
+                self.env.sim,  gymtorch.unwrap_tensor(self.env.root_states), indices, len(idxs))
+
         self.env.refresh_buffers()
         self.post_physics_step()
 
         # compute new observations and rewards
-        new_obs = self.make_observation()
+        new_obs = self.add_noise(
+            self.make_observation(), self.obs_noise_mean, self.obs_noise_var)
 
         logs = self.make_logs()
 
         # update tracking info (episodes done, terminated environments)
         self.ep_lens += 1
         self.term_idx = self.get_termination_list(reward)
+
+        self.push_idx = torch.where(self.ep_lens %
+                                    self.push_freq == 0)[0].tolist()
+
+        if self.should_push and len(self.push_idx) > 0:
+            push_vel = torch.rand(len(self.push_idx), 3, device=self.device)
+            push_vel = (self.push_vel_upper - self.push_vel_lower) * \
+                push_vel + self.push_vel_lower
+            self.env.root_lin_vel[self.push_idx] += push_vel * \
+                self.curriculum_factor
 
         # TODO: add specific reward information
         infos = [{}] * self.num_envs
