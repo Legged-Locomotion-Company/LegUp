@@ -30,7 +30,7 @@ class WildAnymalReward:
 
         self.train_cfg = train_cfg
 
-    def __call__(self, previous_joint_velocities: torch.Tensor, joint_target_t_1: torch.Tensor, joint_target_t_2: torch.Tensor, actions: torch.Tensor, curriculum_factor: float = 1.0) -> torch.Tensor:
+    def __call__(self, previous_joint_velocities: torch.Tensor, joint_target_t_1: torch.Tensor, joint_target_t_2: torch.Tensor, actions: torch.Tensor, command: torch.Tensor, curriculum_factor: float = 1.0) -> torch.Tensor:
         """Compute reward.
 
         Args:
@@ -44,15 +44,17 @@ class WildAnymalReward:
         reward = torch.zeros(self.env.num_environments).to(self.env.device)
 
         v_act = self.env.get_linear_velocity()
-        v_des = torch.tensor([self.train_cfg.command[0], self.train_cfg.command[1]]).to(
-            self.env.device).expand(v_act.shape[0], -1)
+        v_des = torch.zeros_like(v_act)
+        v_des[:, 0:2] = command[:, 1:]
+        # v_des = torch.tensor([self.train_cfg.command[0], self.train_cfg.command[1]]).to(
+        #     self.env.device).expand(v_act.shape[0], -1)
 
         w_act = self.env.get_angular_velocity()
         w_des = torch.zeros_like(w_act)
-        w_des[:] = self.train_cfg.turn_command
+        w_des[:, 2] = command[:, 0]
 
         lin_velocity_reward = lin_velocity(
-            v_des, v_act[:, :2]) * self.reward_scales.velocity
+            v_des[:, :2], v_act[:, :2]) * self.reward_scales.velocity
 
         reward_log['lin_velocity_reward'] = lin_velocity_reward
         reward += lin_velocity_reward
@@ -64,7 +66,7 @@ class WildAnymalReward:
         reward += ang_velocity_reward
 
         lin_ortho_reward = linear_ortho_velocity(
-            v_des, v_act[:, :2]) * self.reward_scales.velocity
+            v_des[:, :2], v_act[:, :2]) * self.reward_scales.velocity
 
         reward_log['lin_ortho_reward'] = lin_ortho_reward
         reward += lin_ortho_reward
@@ -149,12 +151,12 @@ class WildAnymalReward:
         reward += slip_reward
 
         pos_delta_clip_reward = self.reward_scales.pos_delta_clip * \
-            clip(actions[:, 0:12], self.train_cfg.pos_delta_clip)
+            clip(actions[:, 0:12], self.train_cfg.pos_delta_clip, curriculum_factor)
         reward_log['pos_delta_clip_reward'] = pos_delta_clip_reward
         reward += pos_delta_clip_reward
 
         phase_clip_reward = self.reward_scales.phase_clip * \
-            clip(actions[:, 12:], self.train_cfg.phase_delta_clip)
+            clip(actions[:, 12:], self.train_cfg.phase_delta_clip, curriculum_factor)
         reward_log['phase_clip_reward'] = phase_clip_reward
         reward += phase_clip_reward
 

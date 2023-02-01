@@ -261,7 +261,7 @@ def slip(foot_is_in_contact: torch.Tensor, feet_vel: torch.Tensor, curriculum_fa
     return x
 
 
-def clip(actions: torch.Tensor, clip_value: float, scale: float = 1.0) -> torch.Tensor:
+def clip(actions: torch.Tensor, clip_value: float, curriculum_factor: float = 1.0, scale: float = 1.0) -> torch.Tensor:
     """Give a negative reward if the model outputs are greater than the clip value. 
        This is to encourage the model to output values in the range [-clip_value, clip_value]
        formula is -sum((clamp(actions, -clip_value, clip_value) - actions)**2)
@@ -274,6 +274,9 @@ def clip(actions: torch.Tensor, clip_value: float, scale: float = 1.0) -> torch.
     Returns:
         torch.Tensor: the reward for each env of shape (num_envs,)
     """
+
+    clip_value *= curriculum_factor
+
     deltas = torch.clamp(actions, -clip_value,
                          clip_value) - actions
 

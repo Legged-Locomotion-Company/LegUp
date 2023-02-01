@@ -69,9 +69,13 @@ class CustomLocalCallback(BaseCallback):
         """
 
         infos = self.locals['infos'][0]
-        for idx, name in enumerate(infos['names']):
+        for reward_name, reward_val in zip(infos['reward_names'], infos['reward_terms']):
             self.logger.record(
-                f"rewards/{name}", infos['terms'][idx].item())
+                f"rewards/{reward_name}", reward_val.item())
+
+        for log_name, log_val in infos['logs'].items():
+            self.logger.record(
+                f"logs/{log_name}", log_val)
 
         self.model.save(os.path.join(
             self.model_save_path, str(self.num_timesteps)))
@@ -146,9 +150,13 @@ class CustomWandbCallback(WandbCallback):
                 raise Exception("test_exception")
 
         infos = self.locals['infos'][0]
-        for idx, name in enumerate(infos['names']):
+        for reward_name, reward_val in zip(infos['reward_names'], infos['reward_terms']):
             self.logger.record(
-                f"rewards/{name}", infos['terms'][idx].item())
+                f"rewards/{reward_name}", reward_val.item())
+
+        for log_name, log_val in infos['logs'].items():
+            self.logger.record(
+                f"logs/{log_name}", log_val)
 
         # For some reason the video needs to be transposed to frames, channels, height, width
 
@@ -156,10 +164,6 @@ class CustomWandbCallback(WandbCallback):
 
         wandb.log(
             {"video": wandb.Video(numpy_video, fps=20, format="gif")})
-
-        infos = self.locals['infos'][0]
-        for idx, name in enumerate(infos['names']):
-            self.logger.record(f"rewards/{name}", infos['terms'][idx].item())
 
         self.model.save(os.path.join(
             self.model_save_path, str(self.num_timesteps)))

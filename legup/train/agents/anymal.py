@@ -16,7 +16,7 @@ class AnymalAgent(BaseAgent):
     """Specific agent implementation for https://leggedrobotics.github.io/rl-perceptiveloco/assets/pdf/wild_anymal.pdf
     """
 
-    def __init__(self, robot_cfg: Robot, num_environments: int, asset_path: str, asset_name: str, train_cfg: DictConfig):
+    def __init__(self, robot_cfg: Robot, num_environments: int, curriculum_exponent: int, asset_path: str, asset_name: str, train_cfg: DictConfig):
         """Initialize wild anymal agent.
 
         Args:
@@ -26,7 +26,8 @@ class AnymalAgent(BaseAgent):
             asset_name (str): Name of the robot asset
             train_cfg (DictConfig): Configuration dictionary for training
         """
-        super().__init__(robot_cfg, num_environments, asset_path, asset_name)
+
+        super().__init__(robot_cfg, num_environments, curriculum_exponent, asset_path, asset_name)
 
         # need more stuff for reward function like train config
         self.dt = 1/60
@@ -42,7 +43,6 @@ class AnymalAgent(BaseAgent):
             num_environments, self.dt, self.dt, 5, 133 + 208 + 50, self.device)
         self.prev_action = HistoryBuffer(
             num_environments, self.dt, self.dt, 5, 12, self.device)
-        
 
         self.action_space = gym.spaces.Box(low=np.ones(
             16) * -10000000, high=np.ones(16) * 10000000, dtype=np.float32)
@@ -98,13 +98,15 @@ class AnymalAgent(BaseAgent):
 
     def dump_log(self):
         # check for nans
-        nan_idx = torch.unique(torch.argwhere(torch.isnan(self.prev_obs.get(0)))[:, 0])
+        nan_idx = torch.unique(torch.argwhere(
+            torch.isnan(self.prev_obs.get(0)))[:, 0])
         for ni in nan_idx:
             for ts in range(5):
                 # print(f'OBS AT TIMESTEP {ts} FOR ENV {ni}: ')
                 # self.explain_observation(self.prev_obs.get(ts)[ni])
                 print(f'ACTIONS AT TIMESTEP {ts} FOR ENV {ni}: ')
-                print([round(i.item(), 4) for i in self.prev_action.get(ts)[ni]])
+                print([round(i.item(), 4)
+                      for i in self.prev_action.get(ts)[ni]])
                 print()
 
     def explain_observation(self, obs):
@@ -154,8 +156,7 @@ class AnymalAgent(BaseAgent):
         # TODO: talk to rohan about the command
         # ill work on this - Rohan
 
-        proprio[idx, :3] = torch.tensor([1., 0., 0.]).to(
-            self.device)  # self.command[idx]
+        proprio[idx, :3] = self.commands[idx]
 
         proprio[idx, 3:6] = self.env.get_position()[idx]
         proprio[idx, 6:9] = self.env.get_linear_velocity()[idx]
@@ -195,7 +196,7 @@ class AnymalAgent(BaseAgent):
             idx]
 
         obs = torch.cat([proprio, extro, privil], dim=1)
-        
+
         self.prev_obs.step(obs)
 
         if torch.any(torch.isnan(obs)):
@@ -208,10 +209,13 @@ class AnymalAgent(BaseAgent):
         if isinstance(actions, np.ndarray):
             actions = torch.tensor(actions).to(self.device)
 
+        pos_delta_clip = self.train_cfg.pos_delta_clip * (self.curriculum_factor * (1-self.train_cfg.clip_bias) + self.train_cfg.clip_bias)
+        phase_delta_clip = self.train_cfg.phase_delta_clip * (self.curriculum_factor * (1-self.train_cfg.clip_bias) + self.train_cfg.clip_bias)
+
         actions[0:12] = actions[0:12].clip(
-            max=self.train_cfg.pos_delta_clip, min=-self.train_cfg.pos_delta_clip)
+            max=pos_delta_clip, min=-pos_delta_clip)
         actions[12:] = actions[12:].clip(
-            max=self.train_cfg.phase_delta_clip, min=-self.train_cfg.phase_delta_clip)
+            max=phase_delta_clip, min=-phase_delta_clip)
 
         actions = walk_half_circle_line(
             self.env.get_joint_position(), actions, self.phase_gen())
@@ -221,12 +225,20 @@ class AnymalAgent(BaseAgent):
         return actions
 
     def make_reward(self, actions: torch.Tensor) -> torch.Tensor:
+        if isinstance(actions, np.ndarray):
+            actions = torch.tensor(actions).to(self.device)
+        
         total_reward, reward_keys, reward_vals = self.reward_fn(self.joint_vel_history[:, :, 0],
                                                                 self.joint_target_history[:, :, 0],
                                                                 self.joint_target_history[:, :, 1],
-                                                                actions)
+                                                                actions,
+                                                                self.commands,
+                                                                self.curriculum_factor)
 
         return total_reward.cpu(), reward_keys, reward_vals
+    
+    def make_logs(self) -> dict:
+        return {"curriculum_factor": self.curriculum_factor}
 
     def reset_envs(self, envs):
         self.reset_history_vec(envs)
@@ -237,14 +249,13 @@ class AnymalAgent(BaseAgent):
         is_collided = torch.any(self.env.get_contact_states()[
                                 :, [0, 2, 5, 8, 11]], dim=-1)
 
-
         # # Check if the robot is tilted too much
         # is_tilted = torch.any(
         #     torch.abs(self.env.get_rotation()) > self.train_cfg["max_tilt"], dim=-1)
 
         # # Check if the robot's movements exceed the torque limits
         is_exceeding_torque = torch.any(
-        torch.abs(self.env.get_joint_torque()) > self.train_cfg["max_torque"], dim=-1)
+            torch.abs(self.env.get_joint_torque()) > self.train_cfg["max_torque"], dim=-1)
 
         # return (is_collided + is_tilted + is_exceeding_torque).bool()
         return (is_collided + is_exceeding_torque).bool()

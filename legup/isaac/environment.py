@@ -29,6 +29,7 @@ class IsaacGymEnvironment:
         self.gym = self.ctx.gym
         self.sim = self.ctx.sim
         self.env_actor_handles = self.ctx.env_actor_handles
+        self.camera_env = 0
         self.device = torch.device("cuda" if use_cuda else "cpu")
 
         self.all_env_index = torch.Tensor(
@@ -57,14 +58,14 @@ class IsaacGymEnvironment:
         camera_props.height = height
         # camera_props.use_collision_geometry = True
         self.camera_handle = self.gym.create_camera_sensor(
-            self.env_actor_handles[0][0], camera_props)
+            self.env_actor_handles[self.camera_env][0], camera_props)
 
         camera_offset = gymapi.Vec3(-0.5, -0.5, 1)
         camera_rotation = gymapi.Quat().from_euler_zyx(
             np.radians(0), np.radians(45), np.radians(45))
         body_handle = self.gym.get_actor_rigid_body_handle(
-            self.env_actor_handles[0][0], self.env_actor_handles[0][1], 0)
-        self.gym.attach_camera_to_body(self.camera_handle, self.env_actor_handles[0][0], body_handle, gymapi.Transform(
+            self.env_actor_handles[self.camera_env][0], self.env_actor_handles[self.camera_env][1], 0)
+        self.gym.attach_camera_to_body(self.camera_handle, self.env_actor_handles[self.camera_env][0], body_handle, gymapi.Transform(
             camera_offset, camera_rotation), gymapi.FOLLOW_POSITION)
         self.gym.set_light_parameters(self.sim, 0, gymapi.Vec3(
             0.8, 0.8, 0.8), gymapi.Vec3(0.8, 0.8, 0.8), gymapi.Vec3(0, 0, 0))
@@ -270,7 +271,7 @@ class IsaacGymEnvironment:
         Returns:
             np.ndarray: RGB image, shape `(camera_height, camera_width, 4)`
         """
-        return self.gym.get_camera_image(self.sim, self.env_actor_handles[0][0], self.camera_handle, gymapi.IMAGE_COLOR).reshape(self.cam_height, self.cam_width, 4)
+        return self.gym.get_camera_image(self.sim, self.env_actor_handles[self.camera_env][0], self.camera_handle, gymapi.IMAGE_COLOR).reshape(self.cam_height, self.cam_width, 4)
 
     def reset(self, env_index: List[int] = None):
         """Resets the specified robot. Specifically, it will move it to a random position, give it zero velocity, and drop it from a height of 0.28 meters.
@@ -305,5 +306,3 @@ class IsaacGymEnvironment:
         indices = gymtorch.unwrap_tensor(env_index)
         self.gym.set_dof_state_tensor_indexed(
             self.sim,  gymtorch.unwrap_tensor(self.dof_states), indices, len(env_index))
-        self.gym.set_actor_root_state_tensor_indexed(
-            self.sim,  gymtorch.unwrap_tensor(self.root_states), indices, len(env_index))
