@@ -247,14 +247,6 @@ class BaseAgent(VecEnv):
             self.commands[self.term_idx] = self.create_random_commands(
                 len(done_idxs))
 
-            # generate random commands in the range [commands_lower, commands_upper] every episode
-            # adding `out = self.commands[self.term_idx]` doesnt work here for some reason
-
-            # self.commands[self.term_idx] = torch.rand(
-            #     len(self.term_idx), *self.commands.shape[1:], device=self.device)
-            # self.commands[self.term_idx] = (
-            #     self.commands_upper - self.commands_lower) * self.commands[self.term_idx] + self.commands_lower
-
         dones = np.zeros(self.num_envs, dtype=np.bool)
         dones[done_idxs] = True
 
