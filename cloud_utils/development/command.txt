@@ -1,0 +1,1 @@
+python3 main.py environment.headless=True environment.parallel_envs=8192 environment.batch_size=32768 agent.clip_bias=0.1 environment.curriculum_exponent=4.7

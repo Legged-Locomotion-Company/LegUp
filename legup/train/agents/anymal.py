@@ -213,17 +213,17 @@ class AnymalAgent(BaseAgent):
         if isinstance(actions, np.ndarray):
             actions = torch.tensor(actions).to(self.device)
 
-        # pos_delta_clip = self.train_cfg.pos_delta_clip * \
-        #     (self.curriculum_factor *
-        #      (1-self.train_cfg.clip_bias) + self.train_cfg.clip_bias)
-        # phase_delta_clip = self.train_cfg.phase_delta_clip * \
-        #     (self.curriculum_factor *
-        #      (1-self.train_cfg.clip_bias) + self.train_cfg.clip_bias)
+        pos_delta_clip = self.train_cfg.pos_delta_clip * \
+            (self.curriculum_factor *
+             (1-self.train_cfg.clip_bias) + self.train_cfg.clip_bias)
+        phase_delta_clip = self.train_cfg.phase_delta_clip * \
+            (self.curriculum_factor *
+             (1-self.train_cfg.clip_bias) + self.train_cfg.clip_bias)
 
-        # actions[0:12] = actions[0:12].clip(
-        #     max=pos_delta_clip, min=-pos_delta_clip)
-        # actions[12:] = actions[12:].clip(
-        #     max=phase_delta_clip, min=-phase_delta_clip)
+        actions[0:12] = actions[0:12].clip(
+            max=pos_delta_clip, min=-pos_delta_clip)
+        actions[12:] = actions[12:].clip(
+            max=phase_delta_clip, min=-phase_delta_clip)
 
         actions = walk_half_circle_line(
             self.env.get_joint_position(), actions, self.phase_gen())
