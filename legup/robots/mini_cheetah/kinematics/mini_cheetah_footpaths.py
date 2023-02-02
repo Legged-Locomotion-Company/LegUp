@@ -19,7 +19,8 @@ def walk_half_circle_line(q_vec, pos_phase_deltas, phases):
 
     phase_offsets = torch.tensor([0, 0, 0, 0], device=device)
 
-    result = use_gait_footpath(q_vec, pos_phase_deltas, phases, half_circle_line, phase_offsets)
+    result = use_gait_footpath(
+        q_vec, pos_phase_deltas, phases, half_circle_line, phase_offsets)
 
     return result
 
@@ -66,15 +67,12 @@ def half_circle_line(phase):
 
     NUM_ENVS, _ = phase.shape
 
-    x_amp = 0.1
-    z_amp = 0.1
+    z_amp = 0.15
 
     phase = torch.remainder(phase, torch.pi*2)
 
-    result = torch.zeros((NUM_ENVS, 4, 3)).to(device)
+    result = torch.zeros((NUM_ENVS, 4, 3), device=device)
 
-    result[:, :, 0] = -torch.cos(phase) * x_amp
-    result[:, :, 1] = torch.zeros_like(phase).to(device)
     result[:, :, 2] = torch.sin(phase) * z_amp
 
     mask = phase > torch.pi
