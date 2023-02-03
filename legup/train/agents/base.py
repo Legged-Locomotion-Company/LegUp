@@ -69,7 +69,7 @@ class BaseAgent(VecEnv):
         # self.obs_noise_var = 0.1
         self.obs_noise_var = 0.0
 
-        self.should_push = True
+        self.should_push = False
         self.push_freq = 120
         self.push_vel_lower = torch.tensor(
             [1, 1, 0.25], device=self.device, dtype=torch.float)
