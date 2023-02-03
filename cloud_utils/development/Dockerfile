@@ -25,23 +25,23 @@ RUN apt-get update \
     ssh
 
 # Install python dependencies
-# RUN pip install \
-#     opencv-python==4.5.4.60 \
-#     colorama \
-#     gym \
-#     numpy \
-#     opencv_python \
-#     pytest \
-#     pytorch3d \
-#     scipy \
-#     setuptools \
-#     stable_baselines3 \
-#     torchgeometry \
-#     moviepy \
-#     imageio \
-#     wandb \
-#     hydra-core \
-#     uuid
+RUN pip install \
+    opencv-python==4.5.4.60 \
+    colorama \
+    gym \
+    numpy \
+    opencv_python \
+    pytest \
+    pytorch3d \
+    scipy \
+    setuptools \
+    stable_baselines3 \
+    torchgeometry \
+    moviepy \
+    imageio \
+    wandb \
+    hydra-core \
+    uuid
 
 WORKDIR /opt/LegUp
 
