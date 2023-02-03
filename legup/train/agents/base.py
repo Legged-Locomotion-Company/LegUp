@@ -271,7 +271,7 @@ class BaseAgent(VecEnv):
         dones[done_idxs] = True
 
         self.term_idx.clear()
-        return dones, list(done_idxs)
+        return dones, done_idxs.tolist()
 
     def reset(self):
         """Resets all environments, should only be called once at the beginning of training. Undefined behavior if not called only once at the beginning of training
@@ -331,8 +331,8 @@ class BaseAgent(VecEnv):
         dones, done_idxs = self.reset_partial()
 
         # TODO: move this into reset, refactor coming soon so it wont be here for long
-        idxs = torch.tensor(done_idxs + self.push_idx.argwhere().tolist(),
-                            device=self.device).int()
+        idxs = torch.tensor(
+            done_idxs + self.push_idx.argwhere().squeeze(1).tolist(), device=self.device).int()
         if len(idxs) > 0:
             indices = gymtorch.unwrap_tensor(idxs)
             self.env.gym.set_actor_root_state_tensor_indexed(

@@ -24,7 +24,7 @@ RUN apt-get update \
     megatools \
     ssh
 
-# # Install python dependencies
+# Install python dependencies
 # RUN pip install \
 #     opencv-python==4.5.4.60 \
 #     colorama \
