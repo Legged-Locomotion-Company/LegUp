@@ -67,6 +67,8 @@ class AnymalAgent(BaseAgent):
             high=self.clip_high_max.cpu().numpy(),
             dtype=np.float32)
 
+        self.update_factors()
+
     def step_curriculum(self):
         """Empty implementation to prevent curriculum from being stepped by the base class"""
         return
@@ -234,17 +236,7 @@ class AnymalAgent(BaseAgent):
         if isinstance(actions, np.ndarray):
             actions = torch.tensor(actions).to(self.device)
 
-        pos_delta_clip = self.train_cfg.pos_delta_clip * \
-            (self.curriculum_factor *
-             (1-self.train_cfg.clip_bias) + self.train_cfg.clip_bias)
-        phase_delta_clip = self.train_cfg.phase_delta_clip * \
-            (self.curriculum_factor *
-             (1-self.train_cfg.clip_bias) + self.train_cfg.clip_bias)
-
-        actions[0:12] = actions[0:12].clip(
-            max=pos_delta_clip, min=-pos_delta_clip)
-        actions[12:] = actions[12:].clip(
-            max=phase_delta_clip, min=-phase_delta_clip)
+        actions.clip_(self.clip_low, self.clip_high)
 
         actions = walk_half_circle_line(
             self.env.get_joint_position(), actions, self.phase_gen())
@@ -275,21 +267,25 @@ class AnymalAgent(BaseAgent):
             if self.curriculum_factor >= 1.0:
                 self.hit_factor = min(self.hit_factor + hit_factor_step, 1.0)
 
-            self.push_mag_upper = self.push_mag_upper_max * self.hit_factor
-            self.push_mag_lower = self.push_mag_lower_max * self.hit_factor
-
         self.clip_factor **= 1-10**(-self.train_cfg.clip_exponent)
 
-        clip_factor = ((1 - self.train_cfg.clip_bias) *
-                       self.clip_factor + self.train_cfg.clip_bias)
+        self.update_factors()
+
+        return total_reward, reward_keys, reward_vals
+
+    def update_factors(self):
+
+        self.push_mag_upper = self.push_mag_upper_max * self.hit_factor
+        self.push_mag_lower = self.push_mag_lower_max * self.hit_factor
+
+        biased_clip_factor = ((1 - self.train_cfg.clip_bias) *
+                              self.clip_factor + self.train_cfg.clip_bias)
 
         clip_avg = (self.clip_high_max + self.clip_low_max) / 2
         clip_half_range = (self.clip_high_max - self.clip_low_max) / 2
 
-        self.clip_high = clip_avg + clip_half_range * clip_factor
-        self.clip_low = clip_avg - clip_half_range * clip_factor
-
-        return total_reward, reward_keys, reward_vals
+        self.clip_high = clip_avg + clip_half_range * biased_clip_factor
+        self.clip_low = clip_avg - clip_half_range * biased_clip_factor
 
     def make_logs(self) -> dict:
         return {
