@@ -8,10 +8,10 @@ max_torque: 20
 max_tilt: 4.71239
 
 clip_bias: 0.2
-clip_exponent: 4.5
+clip_exponent: 4
 
-pos_delta_clip: 0.1
-phase_delta_clip: 0.25
+pos_delta_clip: 0.75
+phase_delta_clip: 3.14
 
 reward_scales:
   velocity: 0.75
