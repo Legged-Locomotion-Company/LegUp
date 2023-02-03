@@ -40,6 +40,8 @@ class AnymalAgent(BaseAgent):
 
         self.hit_factor = 0.0
 
+        self.clip_factor = 10**(-self.train_cfg.clip_exponent)
+
         self.reset_history_vec()
 
         self.prev_obs = HistoryBuffer(
@@ -276,8 +278,10 @@ class AnymalAgent(BaseAgent):
             self.push_mag_upper = self.push_mag_upper_max * self.hit_factor
             self.push_mag_lower = self.push_mag_lower_max * self.hit_factor
 
+            self.clip_factor **= 1-10**(-self.train_cfg.clip_exponent)
+
             clip_factor = ((1 - self.train_cfg.clip_bias) *
-                           self.curriculum_factor + self.train_cfg.clip_bias)
+                           self.clip_factor + self.train_cfg.clip_bias)
 
             clip_avg = (self.clip_high_max + self.clip_low_max) / 2
             clip_half_range = (self.clip_high_max - self.clip_low_max) / 2
@@ -290,7 +294,8 @@ class AnymalAgent(BaseAgent):
     def make_logs(self) -> dict:
         return {
             "curriculum_factor": self.curriculum_factor,
-            "hit_factor": self.hit_factor, }
+            "hit_factor": self.hit_factor,
+            "clip_factor": self.clip_factor, }
 
     def reset_envs(self, envs):
         self.reset_history_vec(envs)
