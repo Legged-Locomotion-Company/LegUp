@@ -1,8 +1,14 @@
 cd /root;
 
-apt-get update;
-apt-get install -y \
+echo "downloading apt packages";
+
+apt-get update -qq;
+apt-get install -y -qq\
     build-essential \
+    python3.8 \
+    python3-pip \
+    libpython3.8 \
+    libpython3.8-dev \
     libxcursor-dev \
     libxrandr-dev \
     libxinerama-dev \
@@ -14,41 +20,57 @@ apt-get install -y \
     gcc-8 \
     g++-8 \
     vulkan-utils \
+    mesa-vulkan-drivers \
     pigz \
     git \
     libegl1 \
+    libgl1 \
     git-lfs \
     megatools;
 
+rm -rf /opt/conda;
+
+update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.8 0;
+update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-8 8;
+update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-8 8;
+
+export NVIDIA_VISIBLE_DEVICES=all;
+export NVIDIA_DRIVER_CAPABILITIES=all;
+
+echo "creating conda env";
+
+conda create --name legsenv python=3.8;
+
+source /opt/conda/etc/profile.d
+
+conda activate legsenv;
+
+pip3 install --upgrade pip --quiet;
+
+echo "grabbing isaacgym"
+
 megadl 'https://mega.co.nz/#!6f4jnDqB!b_z5kvu8yfmmRdvxfAbSgXa69QSAOcWlkiMCEFTxJ6M';
-tar -xvzf /root/IsaacGym_Preview_4_Package.tar.gz;
+tar -xzf /root/IsaacGym_Preview_4_Package.tar.gz;
 
-conda init bash;
+echo "installing isaacgym"
 
-conda create -y --name legenv python=3.8;
-source /opt/conda/etc/profile.d/conda.sh; 
-conda activate legenv;
-
-cp /opt/conda/envs/legenv/lib/libpython3.8.so.1.0 /usr/lib/;
-
-conda info;
-
-cd isaacgym/python;
-pip3 install --no-input -e .;
-
-cd ../..;
+pip install -q -e /root/isaacgym/python/.;
 
 git clone https://AndrewMead10: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@github.com/Legged-Locomotion-Company/LegUp;
 
-cd LegUp;
+cd /root/LegUp;
 
 git checkout mish_branch;
 
-pip3 install --no-input -e .;
-pip3 install --no-input -r requirements.txt;
+echo "installing legup"
+
+pip3 install --no-input -r requirements.txt --quiet;
+pip3 install --no-input -e . --quiet;
+
+echo "installing nvitop"
 
 pip3 install nvitop;
 
 wandb login ab4474327941fce151a79358a59ee85a3377e660
 
-echo SETUP DONE
+echo "SETUP DONE"
