@@ -3,6 +3,7 @@ from legup.robots.mini_cheetah.kinematics.mini_cheetah_kin_torch import build_ja
 
 import torch
 
+
 class MiniCheetah(Robot):
     """This class respresents the mini_cheetah robot and stores information relevant to it
     Attributes:
@@ -13,8 +14,7 @@ class MiniCheetah(Robot):
     """
 
     home_position = torch.tensor(
-        [0, 0.7, -1.0, 0, -0.7, 1.0, 0, 0.7, -1.0, 0, -0.7, 1.0], device=Robot.device)
-        # [0, -0.8, 1.6, 0, -0.8, 1.6, 0, -0.8, 1.6, 0, -0.8, 1.6], device=Robot.device)
+        [0, 0.625, -1.0, 0, -0.625, 1.0, 0, 0.625, -1.0, 0, -0.625, 1.0], device=Robot.device)
 
     foot_indices = [3, 6, 9, 12]
 
@@ -26,7 +26,8 @@ class MiniCheetah(Robot):
 
     num_joints = 12
 
-    joint_polarity = torch.tensor([0.0, 0.0, -1.0, 0.0, 0.0, 1.0, 0.0, 0.0, -1.0, 0.0, 0.0, 1.0], device=Robot.device)
+    joint_polarity = torch.tensor(
+        [0.0, 0.0, -1.0, 0.0, 0.0, 1.0, 0.0, 0.0, -1.0, 0.0, 0.0, 1.0], device=Robot.device)
 
     def foot_positions(q: torch.Tensor):
         """Calculates the foot positions given joint angles

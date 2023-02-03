@@ -48,7 +48,7 @@ class BaseAgent(VecEnv):
 
         self.curriculum_factor = 10**(-curriculum_exponent)
         # self.env_curriculum_factor
-        self.curriculum_exponent = curriculum_exponent
+        # self.curriculum_exponent = curriculum_exponent
 
         # domain randomization parameters
 
@@ -71,12 +71,16 @@ class BaseAgent(VecEnv):
         self.obs_noise_var = 0.0
 
         self.should_push = True
-        self.push_freq = 120
-        self.push_vel_lower = torch.tensor(
-            [1, 1, 0.25], device=self.device, dtype=torch.float)
+        self.push_prob = 1./1024.
+        self.push_mag_upper_max = 0.5
+        self.push_mag_lower_max = 0.25
+
+        self.push_mag_upper = 0.0
+        self.push_mag_lower = 0.0
+
         self.push_vel_upper = torch.tensor(
-            [2, 2, 0], device=self.device, dtype=torch.float)
-        self.push_idx = []
+            [0.5, 0.5, 0.1], device=self.device, dtype=torch.float)
+        self.push_idx = torch.zeros(self.num_envs, device=self.device)
 
         # OpenAI Gym Environment required fields
         # TODO: custom observation space/action space bounds, this would help with clipping!
@@ -285,6 +289,24 @@ class BaseAgent(VecEnv):
     def make_logs(self) -> dict:
         return {}
 
+    def step_curriculum(self):
+        """Overwrite this function in the child class to implement curriculum learning. This function is called at the end of every episode"""
+        self.curriculum_factor **= 1-10**(-self.curriculum_exponent)
+        self.push_mag_upper = self.push_mag_upper * self.curriculum_factor
+        self.push_mag_lower = self.push_mag_lower * self.curriculum_factor
+
+    def generate_pushes(self, count: int) -> torch.Tensor:
+        out = torch.zeros((int(count), 3), device=self.device)
+
+        out[:, 2].uniform_(0, 2*torch.pi)
+        torch.cos(out[:, 2], out=out[:, 0])
+        torch.sin(out[:, 2], out=out[:, 1])
+        out[:, 2].uniform_(self.push_mag_lower, self.push_mag_upper)
+        out[:, 0:2].mul_(out[:, 2].unsqueeze(1))
+        out[:, 2].zero_()
+
+        return out
+
     def step(self, actions: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict]:
         """Does a single step of the simulation environment based on a given command, and computes new state information and rewards
 
@@ -297,7 +319,8 @@ class BaseAgent(VecEnv):
             and all other tensors have shape `(num_envs)`
         """
 
-        self.curriculum_factor **= 1-10**(-self.curriculum_exponent)
+        # self.curriculum_factor **= 1-10**(-self.curriculum_exponent)
+        self.step_curriculum()
         # send actions through the network
         reward, reward_keys, reward_vals = self.make_reward(actions)
 
@@ -308,7 +331,7 @@ class BaseAgent(VecEnv):
         dones, done_idxs = self.reset_partial()
 
         # TODO: move this into reset, refactor coming soon so it wont be here for long
-        idxs = torch.tensor(done_idxs + self.push_idx,
+        idxs = torch.tensor(done_idxs + self.push_idx.argwhere().tolist(),
                             device=self.device).int()
         if len(idxs) > 0:
             indices = gymtorch.unwrap_tensor(idxs)
@@ -328,15 +351,14 @@ class BaseAgent(VecEnv):
         self.ep_lens += 1
         self.term_idx = self.get_termination_list(reward)
 
-        self.push_idx = torch.where(self.ep_lens %
-                                    self.push_freq == 0)[0].tolist()
+        self.push_idx = torch.rand_like(self.push_idx.float()) < self.push_prob
 
-        if self.should_push and len(self.push_idx) > 0:
-            push_vel = torch.rand(len(self.push_idx), 3, device=self.device)
-            push_vel = (self.push_vel_upper - self.push_vel_lower) * \
-                push_vel + self.push_vel_lower
-            self.env.root_lin_vel[self.push_idx] += push_vel * \
-                self.curriculum_factor
+        push_count = self.push_idx.sum()
+
+        if self.should_push and push_count > 0:
+            pushes = self.generate_pushes(push_count.item())
+
+            self.env.root_lin_vel[self.push_idx] += pushes
 
         # TODO: add specific reward information
         infos = [{}] * self.num_envs

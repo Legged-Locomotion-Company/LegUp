@@ -30,7 +30,10 @@ class WildAnymalReward:
 
         self.train_cfg = train_cfg
 
-    def __call__(self, previous_joint_velocities: torch.Tensor, joint_target_t_1: torch.Tensor, joint_target_t_2: torch.Tensor, actions: torch.Tensor, command: torch.Tensor, curriculum_factor: float = 1.0) -> torch.Tensor:
+    def __call__(self, previous_joint_velocities: torch.Tensor, joint_target_t_1: torch.Tensor, joint_target_t_2: torch.Tensor,
+                 actions: torch.Tensor, command: torch.Tensor,
+                 clip_low: torch.Tensor, clip_high: torch.Tensor,
+                 curriculum_factor: float = 1.0) -> torch.Tensor:
         """Compute reward.
 
         Args:
@@ -151,12 +154,14 @@ class WildAnymalReward:
         reward += slip_reward
 
         pos_delta_clip_reward = self.reward_scales.pos_delta_clip * \
-            clip(actions[:, 0:12], self.train_cfg.pos_delta_clip, curriculum_factor)
+            clip(actions[:, 0:12], self.train_cfg.pos_delta_clip,
+                 curriculum_factor)
         reward_log['pos_delta_clip_reward'] = pos_delta_clip_reward
         reward += pos_delta_clip_reward
 
         phase_clip_reward = self.reward_scales.phase_clip * \
-            clip(actions[:, 12:], self.train_cfg.phase_delta_clip, curriculum_factor)
+            clip(actions[:, 12:], self.train_cfg.phase_delta_clip,
+                 curriculum_factor)
         reward_log['phase_clip_reward'] = phase_clip_reward
         reward += phase_clip_reward
 

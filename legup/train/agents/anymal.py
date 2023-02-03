@@ -38,6 +38,8 @@ class AnymalAgent(BaseAgent):
         self.robot_cfg = robot_cfg
         self.train_cfg = train_cfg
 
+        self.hit_factor = 0.0
+
         self.reset_history_vec()
 
         self.prev_obs = HistoryBuffer(
@@ -45,10 +47,27 @@ class AnymalAgent(BaseAgent):
         self.prev_action = HistoryBuffer(
             num_environments, self.dt, self.dt, 5, 12, self.device)
 
+        self.final_hit_max_mag = 0.5
+        self.final_hit_min_mag = 0.25
+
+        self.clip_high_max = torch.tensor(
+            [self.train_cfg.pos_delta_clip] * 12 +
+            [self.train_cfg.phase_delta_clip] * 4,
+            dtype=torch.float32, device=self.device)
+
+        self.clip_low_max = self.clip_high_max.neg()
+
+        self.clip_high = torch.zeros_like(self.clip_high_max)
+        self.clip_low = torch.zeros_like(self.clip_low_max)
+
         self.action_space = gym.spaces.Box(
-            low=np.array([-0.5, -0.5, -0.25] * 4 + [-np.pi] * 4),
-            high=np.array([0.5, 0.5, 0.5] * 4 + [np.pi] * 4),
+            low=self.clip_low_max.cpu().numpy(),
+            high=self.clip_high_max.cpu().numpy(),
             dtype=np.float32)
+
+    def step_curriculum(self):
+        """Empty implementation to prevent curriculum from being stepped by the base class"""
+        return
 
     def reset_history_vec(self, idx=None):
         # 3 timesteps for history, 2 for velocity
@@ -236,17 +255,42 @@ class AnymalAgent(BaseAgent):
         if isinstance(actions, np.ndarray):
             actions = torch.tensor(actions).to(self.device)
 
-        total_reward, reward_keys, reward_vals = self.reward_fn(self.joint_vel_history[:, :, 0],
-                                                                self.joint_target_history[:, :, 0],
-                                                                self.joint_target_history[:, :, 1],
-                                                                actions,
-                                                                self.commands,
-                                                                self.curriculum_factor)
+        total_reward, reward_keys, reward_vals = self.reward_fn(previous_joint_velocities=self.joint_vel_history[:, :, 0],
+                                                                joint_target_t_1=self.joint_target_history[:, :, 0],
+                                                                joint_target_t_2=self.joint_target_history[:, :, 1],
+                                                                actions=actions,
+                                                                command=self.commands,
+                                                                clip_low=self.clip_low,
+                                                                clip_high=self.clip_high,
+                                                                curriculum_factor=self.curriculum_factor)
+
+        if reward_vals[list(reward_keys).index("lin_velocity_reward")].mean() > self.train_cfg.reward_scales.velocity * 0.8:
+            curriculum_step = 0.01
+            hit_factor_step = 0.01
+
+            self.curriculum_factor = min(
+                self.curriculum_factor + curriculum_step, 1.0)
+            if self.curriculum_factor >= 1.0:
+                self.hit_factor = min(self.hit_factor + hit_factor_step, 1.0)
+
+            self.push_mag_upper = self.push_mag_upper_max * self.hit_factor
+            self.push_mag_lower = self.push_mag_lower_max * self.hit_factor
+
+            clip_factor = ((1 - self.train_cfg.clip_bias) *
+                           self.curriculum_factor + self.train_cfg.clip_bias)
+
+            clip_avg = (self.clip_high_max + self.clip_low_max) / 2
+            clip_half_range = (self.clip_high_max - self.clip_low_max) / 2
+
+            self.clip_high = clip_avg + clip_half_range * clip_factor
+            self.clip_low = clip_avg - clip_half_range * clip_factor
 
         return total_reward, reward_keys, reward_vals
 
     def make_logs(self) -> dict:
-        return {"curriculum_factor": self.curriculum_factor}
+        return {
+            "curriculum_factor": self.curriculum_factor,
+            "hit_factor": self.hit_factor, }
 
     def reset_envs(self, envs):
         self.reset_history_vec(envs)
@@ -255,7 +299,7 @@ class AnymalAgent(BaseAgent):
         # Check if any rigidbodies are hitting the ground
         # 0 = rb index of body
         is_collided = torch.any(self.env.get_contact_states()[
-                                :, [0, 2, 5, 8, 11]], dim=-1)
+            :, [0, 2, 5, 8, 11]], dim=-1)
 
         # # Check if the robot is tilted too much
         # is_tilted = torch.any(

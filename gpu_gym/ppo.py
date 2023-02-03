@@ -297,15 +297,15 @@ class GPUPPO(GPUOnPolicyAlgorithm):
 
         # Logs
         self.logger.record("train/entropy_loss",
-                           th.mean(th.tensor(entropy_losses)))
+                           th.mean(th.tensor(entropy_losses)).item())
         self.logger.record("train/policy_gradient_loss",
-                           th.mean(th.tensor(pg_losses)))
+                           th.mean(th.tensor(pg_losses)).item())
         self.logger.record("train/value_loss",
-                           th.mean(th.tensor(value_losses)))
+                           th.mean(th.tensor(value_losses)).item())
         self.logger.record("train/approx_kl",
-                           th.mean(th.tensor(approx_kl_divs)))
+                           th.mean(th.tensor(approx_kl_divs)).item())
         self.logger.record("train/clip_fraction",
-                           th.mean(th.tensor(clip_fractions)))
+                           th.mean(th.tensor(clip_fractions)).item())
         self.logger.record("train/loss", loss.item())
         self.logger.record("train/explained_variance", explained_var.item())
         if hasattr(self.policy, "log_std"):
