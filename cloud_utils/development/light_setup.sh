@@ -28,8 +28,6 @@ apt-get install -y -qq\
     git-lfs \
     megatools;
 
-rm -rf /opt/conda;
-
 update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.8 0;
 update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-8 8;
 update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-8 8;
@@ -51,6 +49,9 @@ echo "grabbing isaacgym"
 
 megadl 'https://mega.co.nz/#!6f4jnDqB!b_z5kvu8yfmmRdvxfAbSgXa69QSAOcWlkiMCEFTxJ6M';
 tar -xzf /root/IsaacGym_Preview_4_Package.tar.gz;
+
+cp ./isaacgym/docker/nvidia_icd.json /usr/share/vulkan/icd.d/nvidia_icd.json
+cp ./isaacgym/docker/10_nvidia.json /usr/share/glvnd/egl_vendor.d/10_nvidia.json
 
 echo "installing isaacgym"
 
