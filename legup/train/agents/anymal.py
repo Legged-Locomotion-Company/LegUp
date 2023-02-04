@@ -256,7 +256,7 @@ class AnymalAgent(BaseAgent):
         v_act = self.env.get_linear_velocity()
         v_des = self.commands
 
-        absolute_error_factor_min = 0.75
+        absolute_error_factor_min = 1.0
         absolute_error_factor_scale = 1.0
 
         absolute_error_factor = v_des.norm(dim=1) * absolute_error_factor_scale
@@ -284,8 +284,8 @@ class AnymalAgent(BaseAgent):
         self.traversability_running_mean.update(traversability)
 
         if self.traversability_running_mean.get() > self.train_cfg.traversability_threshold:
-            curriculum_step = 0.01
-            hit_factor_step = 0.01
+            curriculum_step = 1e-6
+            hit_factor_step = 1e-6
 
             self.curriculum_factor = min(
                 self.curriculum_factor + curriculum_step, 1.0)
