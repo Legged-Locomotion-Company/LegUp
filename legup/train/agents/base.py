@@ -54,7 +54,7 @@ class BaseAgent(VecEnv):
 
         # linear velocity command limits in meters per second
         self.command_mag_lower = torch.tensor(0., device=self.device)
-        self.command_mag_upper = torch.tensor(2., device=self.device)
+        self.command_mag_upper = torch.tensor(1., device=self.device)
 
         # angular velocity command limits in radians per second
         self.command_ang_vel_lower = torch.tensor(-1., device=self.device)
@@ -195,7 +195,7 @@ class BaseAgent(VecEnv):
         result = torch.zeros((count, 3), device=self.device)
 
         ang_range = (self.command_ang_upper -
-                     self.command_ang_lower) * self.curriculum_factor
+                     self.command_ang_lower)  # * self.curriculum_factor
         ang_avg = (self.command_ang_upper + self.command_ang_lower) / 2
         ang_upper = ang_avg + ang_range / 2
         ang_lower = ang_avg - ang_range / 2
