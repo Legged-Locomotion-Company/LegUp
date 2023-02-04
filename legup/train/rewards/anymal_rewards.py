@@ -153,17 +153,17 @@ class WildAnymalReward:
         reward_log['slip_reward'] = slip_reward
         reward += slip_reward
 
-        pos_delta_clip_reward = self.reward_scales.pos_delta_clip * \
-            clip(actions[:, 0:12], self.train_cfg.pos_delta_clip,
-                 curriculum_factor)
-        reward_log['pos_delta_clip_reward'] = pos_delta_clip_reward
-        reward += pos_delta_clip_reward
+        # pos_delta_clip_reward = self.reward_scales.pos_delta_clip * \
+        #     clip(actions[:, 0:12], self.train_cfg.pos_delta_clip,
+        #          curriculum_factor)
+        # reward_log['pos_delta_clip_reward'] = pos_delta_clip_reward
+        # reward += pos_delta_clip_reward
 
-        phase_clip_reward = self.reward_scales.phase_clip * \
-            clip(actions[:, 12:], self.train_cfg.phase_delta_clip,
-                 curriculum_factor)
-        reward_log['phase_clip_reward'] = phase_clip_reward
-        reward += phase_clip_reward
+        # phase_clip_reward = self.reward_scales.phase_clip * \
+        #     clip(actions[:, 12:], self.train_cfg.phase_delta_clip,
+        #          curriculum_factor)
+        # reward_log['phase_clip_reward'] = phase_clip_reward
+        # reward += phase_clip_reward
 
         # reward_log_keys_per_env = [[key for key in reward_log.keys()] for _ in range(self.env.num_environments)]
         # reward_log_values_per_env = [[value[i] for value in reward_log.values()] for i in range(self.env.num_environments)]
