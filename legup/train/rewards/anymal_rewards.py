@@ -32,7 +32,6 @@ class WildAnymalReward:
 
     def __call__(self, previous_joint_velocities: torch.Tensor, joint_target_t_1: torch.Tensor, joint_target_t_2: torch.Tensor,
                  actions: torch.Tensor, command: torch.Tensor,
-                 clip_low: torch.Tensor, clip_high: torch.Tensor,
                  curriculum_factor: float = 1.0) -> torch.Tensor:
         """Compute reward.
 
