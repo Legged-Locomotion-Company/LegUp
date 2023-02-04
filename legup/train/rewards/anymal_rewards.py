@@ -107,6 +107,13 @@ class WildAnymalReward:
 
         # We only set a threshold for the knee joints.
         joint_positions = self.env.get_joint_position()
+
+        straight_knee_reward = self.reward_scales.straight_knee * \
+            straight_knee(robot=self.robot_config,
+                          dof_pos=joint_positions, thold=self.knee_threshold)
+
+        reward_log['straight_knee_reward'] = straight_knee_reward
+        reward += straight_knee_reward
         # knee_joint_positions = joint_positions[:,
         #                                        self.robot_config.knee_indices]
         # joint_constraints_reward = self.reward_scales.joint_constraints * \

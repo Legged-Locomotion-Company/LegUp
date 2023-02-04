@@ -1,6 +1,8 @@
 
 from legup.train.rewards.reward_helpers import squared_norm
 
+from legup.robots.Robot import Robot
+
 from typing import Union
 
 import torch
@@ -285,3 +287,12 @@ def clip(actions: torch.Tensor, clip_value: float, curriculum_factor: float = 1.
     x *= scale
 
     return x
+
+
+def straight_knee(robot: Robot, dof_pos: torch.Tensor, thold: float, scale: float = 1.0) -> torch.Tensor:
+    knee_positions = dof_pos[:, robot.knee_indices]
+
+    absolute_knee_positions_violations = (
+        knee_positions.abs() - thold).clamp(max=0.0)
+
+    return -torch.einsum('Bi,Bi->B', absolute_knee_positions_violations, absolute_knee_positions_violations) * 25
