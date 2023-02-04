@@ -28,6 +28,7 @@ class CustomLocalCallback(BaseCallback):
         self.training_id = training_id
 
         self.model_save_path = f'{root_path}/checkpoints/{self.training_id}'
+        self.newest_model_path = os.path.join(self.model_save_path, 'newest')
 
         super().__init__(verbose)
 
@@ -97,10 +98,11 @@ class CustomWandbCallback(WandbCallback):
         self.training_id = training_id
 
         self.model_save_path = f'{root_path}/checkpoints/{self.training_id}'
+        self.newest_model_path = os.path.join(self.model_save_path, 'newest')
         self.video_buffer = []
 
         self.rollout_count = 0
-        self.video_save_freq = 10
+        self.video_save_freq = 4
         self.save_video_this_rollout = False
 
         WandbCallback.__init__(
@@ -181,6 +183,8 @@ class CustomWandbCallback(WandbCallback):
 
         self.model.save(os.path.join(
             self.model_save_path, str(self.num_timesteps)))
+
+        self.model.save(self.newest_model_path)
 
         # , base_path='checkpoints')
         wandb.save(os.path.join(self.model_save_path, '*'))

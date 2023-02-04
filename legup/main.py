@@ -8,6 +8,8 @@ from legup.utils.wandb_wrapper import WandBWrapper
 from legup.robots.mini_cheetah.mini_cheetah import MiniCheetah
 from legup.train.models.anymal.teacher import CustomTeacherActorCriticPolicy
 
+import torch
+
 import cv2
 import hydra
 from omegaconf import DictConfig
@@ -51,7 +53,10 @@ def train_ppo(cfg: DictConfig, root_path: str):
             "clip_range": cfg.environment.clip_range,
         }
 
-        wandb_wrapper = WandBWrapper(wandb_config)
+        resume_id = cfg.resume if cfg.resume != 'no' else None
+
+        wandb_wrapper = WandBWrapper(
+            wandb_config, resume=True, resume_id=resume_id)
 
         cb = CustomWandbCallback(
             env, training_id=wandb_wrapper.id, root_path=root_path)
@@ -72,23 +77,29 @@ def train_ppo(cfg: DictConfig, root_path: str):
 
 def run_training(model, total_timesteps, callback, cfg, id=None, wandb_wrapper=None, retry_count=0, resume=False, log_dump_func=None):
 
-    if resume:
-        if cfg.environment.headless and wandb_wrapper is not None:
+    if cfg.environment.headless and wandb_wrapper is not None:
+        if not wandb_wrapper.is_initialized():
             wandb_wrapper.recover()
-        else:
-            model.load(f'saved_models/{callback.training_id}')
+
+        if wandb_wrapper.is_resumed():
+            restored_file = wandb_wrapper.restore('newest.zip')
+            model.set_parameters(restored_file.name)
 
     # Kill if there have been more than 5 exceptions each within 5 minutes of each other
     if retry_count > 5:
         print("Failed to resume training after 5 retries. Exiting")
         return
 
-    os.listdir()
+    # os.listdir()
 
     # save the start time so that we know how long between exceptions
     start_time = time.time()
 
-    model.learn(total_timesteps=total_timesteps, callback=callback)
+    try:
+        model.learn(total_timesteps=total_timesteps, callback=callback)
+    except Exception as e:
+        log_dump_func()
+        raise e
 
 # Runs the agent based on a saved model
 
