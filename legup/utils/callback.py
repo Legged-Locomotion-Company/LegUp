@@ -99,6 +99,10 @@ class CustomWandbCallback(WandbCallback):
         self.model_save_path = f'{root_path}/checkpoints/{self.training_id}'
         self.video_buffer = []
 
+        self.rollout_count = 0
+        self.video_save_freq = 10
+        self.save_video_this_rollout = False
+
         WandbCallback.__init__(
             self, model_save_path=self.model_save_path, verbose=verbose)
 
@@ -119,6 +123,15 @@ class CustomWandbCallback(WandbCallback):
         This event is triggered before collecting new samples.
         """
         # print("BEFORE ROLLOUT (ROLLOUT START)")
+
+        self.save_video_this_rollout = False
+
+        if self.rollout_count % self.video_save_freq == 0:
+            self.save_video_this_rollout = True
+
+        self.video_buffer = []
+        self.rollout_count += 1
+
         pass
 
     def _on_step(self) -> bool:
@@ -132,7 +145,8 @@ class CustomWandbCallback(WandbCallback):
         :return: (bool) If the callback returns False, training is aborted early.
         """
 
-        self.video_buffer.append(self.env_.render())
+        if self.save_video_this_rollout:
+            self.video_buffer.append(self.env_.render())
 
         return True
 
@@ -162,8 +176,9 @@ class CustomWandbCallback(WandbCallback):
 
         numpy_video = np.array(self.video_buffer).transpose([0, 3, 1, 2])
 
-        wandb.log(
-            {"video": wandb.Video(numpy_video, fps=20, format="gif")})
+        if self.save_video_this_rollout:
+            wandb.log(
+                {"video": wandb.Video(numpy_video, fps=20, format="gif")})
 
         self.model.save(os.path.join(
             self.model_save_path, str(self.num_timesteps)))
