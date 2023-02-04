@@ -195,7 +195,7 @@ class BaseAgent(VecEnv):
         result = torch.zeros((count, 3), device=self.device)
 
         ang_range = (self.command_ang_upper -
-                     self.command_ang_lower) * self.curriculum_factor
+                     self.command_ang_lower)  # * self.curriculum_factor
         ang_avg = (self.command_ang_upper + self.command_ang_lower) / 2
         ang_upper = ang_avg + ang_range / 2
         ang_lower = ang_avg - ang_range / 2
