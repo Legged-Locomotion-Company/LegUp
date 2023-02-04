@@ -54,7 +54,7 @@ class AnymalAgent(BaseAgent):
         self.final_hit_min_mag = 0.25
 
         self.clip_high_max = torch.tensor(
-            [0.15, 0.15, 0.15] * 4 +
+            [0.15, 0.15, 0.1] * 4 +
             [torch.pi] * 4,
             dtype=torch.float32, device=self.device)
 
