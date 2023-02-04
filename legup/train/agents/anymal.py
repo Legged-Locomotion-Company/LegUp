@@ -256,8 +256,8 @@ class AnymalAgent(BaseAgent):
         v_act = self.env.get_linear_velocity()
         v_des = self.commands
 
-        absolute_error_factor_min = 0.1
-        absolute_error_factor_scale = 0.1
+        absolute_error_factor_min = 0.75
+        absolute_error_factor_scale = 1.0
 
         absolute_error_factor = v_des.norm(dim=1) * absolute_error_factor_scale
         absolute_error_factor.clamp_(min=absolute_error_factor_min)
@@ -316,7 +316,7 @@ class AnymalAgent(BaseAgent):
         return {
             "biased_curriculum_factor": self.get_biased_curriculum_factor(),
             "hit_factor": self.hit_factor,
-            "traversability": self.traversability_running_mean.get(),
+            "traversability": self.traversability_running_mean.get().item(),
             # "clip_factor": self.clip_factor,
         }
 
