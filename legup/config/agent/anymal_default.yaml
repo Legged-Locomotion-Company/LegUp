@@ -7,8 +7,10 @@ max_torque: 20
 # 3pi/2
 max_tilt: 4.71239
 
-clip_bias: 0.15
-clip_exponent: 4.5
+# clip_bias: 0.15
+# clip_exponent: 4.5
+
+traversability_threshold: 0.7
 
 # pos_delta_clip: 0.1
 # phase_delta_clip: 3.14

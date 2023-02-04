@@ -2,7 +2,7 @@ from legup.train.agents.base import BaseAgent
 from legup.train.rewards.anymal_rewards import WildAnymalReward
 from legup.robots.Robot import Robot
 from legup.robots.mini_cheetah.kinematics.mini_cheetah_footpaths import walk_half_circle_line
-from legup.train.rewards.util import HistoryBuffer
+from legup.train.rewards.util import HistoryBuffer, RunningMean
 from omegaconf import DictConfig
 from typing import List
 from typing import Tuple
@@ -49,6 +49,9 @@ class AnymalAgent(BaseAgent):
             num_environments, self.dt, self.dt, 5, 133 + 208 + 50, self.device)
         self.prev_action = HistoryBuffer(
             num_environments, self.dt, self.dt, 5, 12, self.device)
+
+        self.traversability_running_mean = RunningMean(
+            10, dtype=torch.float32, device=self.device)
 
         self.final_hit_max_mag = 0.5
         self.final_hit_min_mag = 0.25
@@ -249,6 +252,23 @@ class AnymalAgent(BaseAgent):
 
         return actions
 
+    def calculate_traversability(self):
+        v_act = self.env.get_linear_velocity()
+        v_des = self.commands
+
+        absolute_error_factor_min = 0.1
+        absolute_error_factor_scale = 0.1
+
+        absolute_error_factor = v_des.norm(dim=1) * absolute_error_factor_scale
+        absolute_error_factor.clamp_(min=absolute_error_factor_min)
+
+        err = v_act - v_des
+        err_norm = err.norm(dim=1)
+
+        traversability = 1-err_norm/absolute_error_factor
+
+        return traversability.mean()
+
     def make_reward(self, actions: torch.Tensor) -> torch.Tensor:
         if isinstance(actions, np.ndarray):
             actions = torch.tensor(actions).to(self.device)
@@ -260,7 +280,10 @@ class AnymalAgent(BaseAgent):
                                                                 command=self.commands,
                                                                 curriculum_factor=self.get_biased_curriculum_factor())
 
-        if reward_vals[list(reward_keys).index("lin_velocity_reward")].mean() > self.train_cfg.reward_scales.velocity * 0.8:
+        traversability = self.calculate_traversability()
+        self.traversability_running_mean.update(traversability)
+
+        if self.traversability_running_mean.get() > self.train_cfg.traversability_threshold:
             curriculum_step = 0.01
             hit_factor_step = 0.01
 
@@ -293,6 +316,7 @@ class AnymalAgent(BaseAgent):
         return {
             "biased_curriculum_factor": self.get_biased_curriculum_factor(),
             "hit_factor": self.hit_factor,
+            "traversability": self.traversability_running_mean.get(),
             # "clip_factor": self.clip_factor,
         }
 

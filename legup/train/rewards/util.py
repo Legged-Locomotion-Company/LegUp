@@ -2,8 +2,10 @@ from typing import Union, List, Tuple
 
 import torch
 
+
 class HistoryBuffer:
     """Buffer to store most recently updated data that is updated every few seconds"""
+
     def __init__(self, num_envs: int, dt: float, update_freq: int, history_size: int, data_size: int, device: torch.device, fill: torch.Tensor = None):
         """
         Args:
@@ -22,13 +24,13 @@ class HistoryBuffer:
         self.num_envs = num_envs
 
         self.elapsed_time = torch.zeros(num_envs).to(self.device)
-        self.data = torch.zeros(num_envs, data_size, history_size).to(self.device)
+        self.data = torch.zeros(num_envs, data_size,
+                                history_size).to(self.device)
 
         if fill is not None:
             for i in range(history_size):
                 self.data[:, :, i] = fill
 
-    
     def step(self, new_data: torch.Tensor):
         """Updates the buffer if enough time has elapsed (specified by `dt`) from the previous call
 
@@ -41,8 +43,9 @@ class HistoryBuffer:
         self.elapsed_time[update_idx] = 0
 
         self.data[update_idx, :, 1:] = self.data[update_idx, :, :-1]
-        self.data[update_idx, :, 0] = new_data[update_idx, :] # 0 is the newest
-    
+        # 0 is the newest
+        self.data[update_idx, :, 0] = new_data[update_idx, :]
+
     def get(self, idx: Union[int, List[int]]) -> torch.Tensor:
         """Gets the data at the specified index
 
@@ -53,7 +56,7 @@ class HistoryBuffer:
             torch.Tensor: data at that index, shape `(num_envs, data_size, :)`
         """
         return self.data[:, :, idx]
-    
+
     def flatten(self) -> torch.Tensor:
         """Gets all the data in the buffer, flattened
 
@@ -70,3 +73,24 @@ class HistoryBuffer:
         """
         self.elapsed_time[update_idx] = 0
         self.data[update_idx, :, :] = 0
+
+
+class RunningMean:
+    def __init__(self, size: int, dtype: torch.dtype = torch.float32, device: torch.device = torch.device('cpu')):
+        self.size = size
+        self.count = 0
+        self.data = torch.empty(size, dtype=dtype, device=device)
+
+    def update(self, new_data: torch.Tensor):
+        if self.count < self.size:
+            self.data[self.count] = new_data
+            self.count += 1
+        else:
+            self.data = self.data.roll(1)
+            self.data[0] = new_data
+
+    def get(self) -> torch.Tensor:
+        return self.data[:self.count].mean()
+
+    def reset(self):
+        self.count = 0
