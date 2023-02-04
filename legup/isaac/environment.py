@@ -288,10 +288,11 @@ class IsaacGymEnvironment:
         random_pos[:, 2] = 0.40
 
         # TODO: make faster for cuda?
-        random_rot = torch.zeros(len(env_index), 3)
-        random_rot[:, 0] = torch.deg2rad(torch.rand(len(env_index)) * 360)
-        random_rot[:, 1] = 0
-        random_rot[:, 2] = np.radians(180)
+        random_rot = torch.empty(
+            len(env_index), 3, device=self.device, dtype=torch.float32)
+        random_rot.uniform_(-torch.pi, torch.pi)
+        random_rot *= torch.tensor([1, 1/12, 1/12], device=self.device)
+        random_rot[..., 2] += torch.pi
         random_rot = R.matrix_to_quaternion(
             R.euler_angles_to_matrix(random_rot, convention='XYZ'))
 
