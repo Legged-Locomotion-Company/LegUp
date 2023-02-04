@@ -200,18 +200,11 @@ class BaseAgent(VecEnv):
         ang_upper = ang_avg + ang_range / 2
         ang_lower = ang_avg - ang_range / 2
 
-        mag_range = (self.command_mag_upper -
-                     self.command_mag_lower) * self.curriculum_factor
-        mag_avg = (self.command_mag_upper + self.command_mag_lower) / 2
-        mag_upper = mag_avg + mag_range / 2
-        mag_lower = mag_avg - mag_range / 2
+        mag_upper = self.command_mag_upper * self.curriculum_factor
+        mag_lower = self.command_mag_lower * self.curriculum_factor
 
-        ang_vel_range = (self.command_ang_vel_upper -
-                         self.command_ang_vel_lower) * self.curriculum_factor
-        ang_vel_avg = (self.command_ang_vel_upper +
-                       self.command_ang_vel_lower) / 2
-        ang_vel_upper = ang_vel_avg + ang_vel_range / 2
-        ang_vel_lower = ang_vel_avg - ang_vel_range / 2
+        ang_vel_upper = self.command_ang_vel_upper * self.curriculum_factor
+        ang_vel_lower = self.command_ang_vel_lower * self.curriculum_factor
 
         # use idx 0 as scratch space
         command_angles_scratch = result[:, 0]
