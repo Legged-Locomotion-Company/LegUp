@@ -174,9 +174,8 @@ class CustomWandbCallback(WandbCallback):
 
         # For some reason the video needs to be transposed to frames, channels, height, width
 
-        numpy_video = np.array(self.video_buffer).transpose([0, 3, 1, 2])
-
         if self.save_video_this_rollout:
+            numpy_video = np.array(self.video_buffer).transpose([0, 3, 1, 2])
             wandb.log(
                 {"video": wandb.Video(numpy_video, fps=20, format="gif")})
 
