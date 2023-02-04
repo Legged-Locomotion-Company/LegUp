@@ -12,5 +12,6 @@ discount: 0.9995
 clip_range: 0.2
 verbose: 1
 curriculum_exponent: 4.7
+curriculum_bias: 0.1
 # dt = 1/cfg.dt, since we cannot specify fractions in yaml
 dt: 60

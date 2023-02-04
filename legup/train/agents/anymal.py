@@ -27,8 +27,9 @@ class AnymalAgent(BaseAgent):
             train_cfg (DictConfig): Configuration dictionary for training
         """
 
-        super().__init__(robot_cfg, num_environments,
-                         curriculum_exponent, asset_path, asset_name)
+        super().__init__(robot=robot_cfg, num_environments=num_environments,
+                         curriculum_exponent=curriculum_exponent, curriculum_bias=curriculum_bias,
+                         asset_path=asset_path, asset_name=asset_name)
 
         # need more stuff for reward function like train config
         self.dt = 1/60

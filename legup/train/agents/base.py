@@ -24,7 +24,7 @@ class BaseAgent(VecEnv):
     Read the documentation for each of these functions to learn how to implement them!
     """
 
-    def __init__(self, robot: Robot, num_environments: int, curriculum_exponent: int, asset_path: str, asset_name: str):
+    def __init__(self, robot: Robot, num_environments: int, curriculum_exponent: float, curriculum_bias: float, asset_path: str, asset_name: str):
         """
         Args:
             num_environments (int): number of parallel environments to create in simulator
@@ -47,6 +47,7 @@ class BaseAgent(VecEnv):
         self.max_ep_len = 1000 / self.dt  # TODO: make this config
 
         self.curriculum_factor = 10**(-curriculum_exponent)
+        self.curriculum_bias = curriculum_bias
         # self.env_curriculum_factor
         # self.curriculum_exponent = curriculum_exponent
 
@@ -291,7 +292,7 @@ class BaseAgent(VecEnv):
         self.push_mag_lower = self.push_mag_lower * self.curriculum_factor
 
     def get_biased_curriculum_factor(self):
-        return (1 - self.train_cfg.curriculum_bias) * self.curriculum_factor + self.train_cfg.curriculum_bias
+        return (1 - self.curriculum_bias) * self.curriculum_factor + self.curriculum_bias
 
     def generate_pushes(self, count: int) -> torch.Tensor:
         out = torch.zeros((int(count), 3), device=self.device)
