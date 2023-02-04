@@ -54,7 +54,7 @@ class BaseAgent(VecEnv):
 
         # linear velocity command limits in meters per second
         self.command_mag_lower = torch.tensor(0., device=self.device)
-        self.command_mag_upper = torch.tensor(2., device=self.device)
+        self.command_mag_upper = torch.tensor(1., device=self.device)
 
         # angular velocity command limits in radians per second
         self.command_ang_vel_lower = torch.tensor(-1., device=self.device)
