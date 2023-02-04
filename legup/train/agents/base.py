@@ -192,19 +192,21 @@ class BaseAgent(VecEnv):
         Args:
             idxs (Union[torch.Tensor, List[int], int]): idxs of environments whose commands should be randomized
         """
-        result = torch.zeros((count, 3), device=self.device)
+        result = torch.zeros((count, 3), device=self.device)\
+
+        biased_curriculum_factor = self.get_biased_curriculum_factor()
 
         ang_range = (self.command_ang_upper -
-                     self.command_ang_lower) * self.curriculum_factor
+                     self.command_ang_lower) * biased_curriculum_factor
         ang_avg = (self.command_ang_upper + self.command_ang_lower) / 2
         ang_upper = ang_avg + ang_range / 2
         ang_lower = ang_avg - ang_range / 2
 
-        mag_upper = self.command_mag_upper * self.curriculum_factor
-        mag_lower = self.command_mag_lower * self.curriculum_factor
+        mag_upper = self.command_mag_upper * biased_curriculum_factor
+        mag_lower = self.command_mag_lower * biased_curriculum_factor
 
-        ang_vel_upper = self.command_ang_vel_upper * self.curriculum_factor
-        ang_vel_lower = self.command_ang_vel_lower * self.curriculum_factor
+        ang_vel_upper = self.command_ang_vel_upper * biased_curriculum_factor
+        ang_vel_lower = self.command_ang_vel_lower * biased_curriculum_factor
 
         # use idx 0 as scratch space
         command_angles_scratch = result[:, 0]
@@ -287,6 +289,9 @@ class BaseAgent(VecEnv):
         self.curriculum_factor **= 1-10**(-self.curriculum_exponent)
         self.push_mag_upper = self.push_mag_upper * self.curriculum_factor
         self.push_mag_lower = self.push_mag_lower * self.curriculum_factor
+
+    def get_biased_curriculum_factor(self):
+        return (1 - self.train_cfg.curriculum_bias) * self.curriculum_factor + self.train_cfg.curriculum_bias
 
     def generate_pushes(self, count: int) -> torch.Tensor:
         out = torch.zeros((int(count), 3), device=self.device)

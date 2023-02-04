@@ -16,7 +16,7 @@ class AnymalAgent(BaseAgent):
     """Specific agent implementation for https://leggedrobotics.github.io/rl-perceptiveloco/assets/pdf/wild_anymal.pdf
     """
 
-    def __init__(self, robot_cfg: Robot, num_environments: int, curriculum_exponent: int, asset_path: str, asset_name: str, train_cfg: DictConfig):
+    def __init__(self, robot_cfg: Robot, num_environments: int, curriculum_exponent: int, curriculum_bias: int, asset_path: str, asset_name: str, train_cfg: DictConfig):
         """Initialize wild anymal agent.
 
         Args:
@@ -257,7 +257,7 @@ class AnymalAgent(BaseAgent):
                                                                 joint_target_t_2=self.joint_target_history[:, :, 1],
                                                                 actions=actions,
                                                                 command=self.commands,
-                                                                curriculum_factor=self.curriculum_factor)
+                                                                curriculum_factor=self.get_biased_curriculum_factor())
 
         if reward_vals[list(reward_keys).index("lin_velocity_reward")].mean() > self.train_cfg.reward_scales.velocity * 0.8:
             curriculum_step = 0.01
@@ -290,7 +290,7 @@ class AnymalAgent(BaseAgent):
 
     def make_logs(self) -> dict:
         return {
-            "curriculum_factor": self.curriculum_factor,
+            "biased_curriculum_factor": self.get_biased_curriculum_factor(),
             "hit_factor": self.hit_factor,
             # "clip_factor": self.clip_factor,
         }

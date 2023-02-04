@@ -25,8 +25,8 @@ def train_ppo(cfg: DictConfig, root_path: str):
     total_timesteps = cfg.environment.parallel_envs * \
         cfg.environment.n_steps * 1e7
 
-    env = AnymalAgent(MiniCheetah, cfg.environment.parallel_envs, cfg.environment.curriculum_exponent,
-                      f"{root_path}/robots/mini_cheetah/physical_models", "mini-cheetah.urdf", train_cfg=cfg.agent)
+    env = AnymalAgent(robot_cfg=MiniCheetah, num_environments=cfg.environment.parallel_envs, curriculum_exponent=cfg.environment.curriculum_exponent, curriculum_bias=cfg.environment.curriculum_bias,
+                      asset_path=f"{root_path}/robots/mini_cheetah/physical_models", asset_name="mini-cheetah.urdf", train_cfg=cfg.agent)
 
     cb = None
 
