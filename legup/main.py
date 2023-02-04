@@ -58,7 +58,8 @@ def train_ppo(cfg: DictConfig, root_path: str):
 
     model = PPO(CustomTeacherActorCriticPolicy, env, tensorboard_log='./concurrent_training_tb', verbose=1,
                 batch_size=cfg.environment.batch_size, n_steps=cfg.environment.n_steps, n_epochs=cfg.environment.n_epochs, ent_coef=cfg.environment.entropy_coef,
-                learning_rate=cfg.environment.learning_rate, clip_range=cfg.environment.clip_range, gae_lambda=cfg.environment.gae_lambda, gamma=cfg.environment.discount, vf_coef=cfg.environment.value_coef, use_sde=True)
+                learning_rate=cfg.environment.learning_rate, clip_range=cfg.environment.clip_range, gae_lambda=cfg.environment.gae_lambda, gamma=cfg.environment.discount, vf_coef=cfg.environment.value_coef,
+                use_sde=True, sde_sample_freq=32)
 
     run_training(model, total_timesteps, cfg=cfg, callback=cb,
                  wandb_wrapper=wandb_wrapper, resume=False, log_dump_func=env.dump_log)
