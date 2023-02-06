@@ -57,12 +57,12 @@ class AnymalAgent(BaseAgent):
         self.final_hit_min_mag = 0.25
 
         self.clip_high_max = torch.tensor(
-            [0.15, 0.15, 0.1] * 4 +
+            [0.075, 0.075, 0.075] * 4 +
             [torch.pi] * 4,
             dtype=torch.float32, device=self.device)
 
         self.clip_low_max = torch.tensor(
-            [-0.15, -0.15, -0.05] * 4 +
+            [-0.075, -0.075, -0.05] * 4 +
             [-torch.pi] * 4,
             dtype=torch.float32, device=self.device)
 
@@ -253,21 +253,21 @@ class AnymalAgent(BaseAgent):
         return actions
 
     def calculate_traversability(self):
-        v_act = self.env.get_linear_velocity()
-        v_des = self.commands
+        # pull out xy velocity and command
+        v_act = self.env.get_linear_velocity()[:, 0:2]
+        v_des = self.commands[:, 1:3]
 
-        absolute_error_factor_min = 1.0
-        absolute_error_factor_scale = 1.0
+        v_des_norms = v_des.norm(dim=-1)
 
-        absolute_error_factor = v_des.norm(dim=1) * absolute_error_factor_scale
-        absolute_error_factor.clamp_(min=absolute_error_factor_min)
+        # Bias value controls the tolerance at rest in meters per second
+        bias = 0.25
+        tolerances = (10+v_des_norms.square()/4).sqrt() - 10**0.5 + bias
 
-        err = v_act - v_des
-        err_norm = err.norm(dim=1)
+        error_norms = (v_act - v_des).norm(dim=-1)
 
-        traversability = 1-err_norm/absolute_error_factor
+        traversable = torch.where(error_norms < tolerances, 1.0, 0.0)
 
-        return traversability.mean()
+        return traversable.mean()
 
     def make_reward(self, actions: torch.Tensor) -> torch.Tensor:
         if isinstance(actions, np.ndarray):
@@ -284,8 +284,8 @@ class AnymalAgent(BaseAgent):
         self.traversability_running_mean.update(traversability)
 
         if self.traversability_running_mean.get() > self.train_cfg.traversability_threshold:
-            curriculum_step = 1e-6
-            hit_factor_step = 1e-6
+            curriculum_step = 1e-5
+            hit_factor_step = 1e-5
 
             self.curriculum_factor = min(
                 self.curriculum_factor + curriculum_step, 1.0)

@@ -54,16 +54,18 @@ class BaseAgent(VecEnv):
         # domain randomization parameters
 
         # linear velocity command limits in meters per second
-        self.command_mag_lower = torch.tensor(0., device=self.device)
-        self.command_mag_upper = torch.tensor(1., device=self.device)
+        self.command_mag_lower = torch.tensor(1.0, device=self.device)
+        self.command_mag_upper = torch.tensor(1.5, device=self.device)
 
         # angular velocity command limits in radians per second
         self.command_ang_vel_lower = torch.tensor(-1., device=self.device)
         self.command_ang_vel_upper = torch.tensor(1., device=self.device)
 
         # angle limits for robot linear command wrt the robot frame
-        self.command_ang_lower = torch.tensor(-torch.pi, device=self.device)
-        self.command_ang_upper = torch.tensor(torch.pi, device=self.device)
+        # -torch.pi, device=self.device)
+        self.command_ang_lower = torch.tensor(0, device=self.device)
+        # torch.pi, device=self.device)
+        self.command_ang_upper = torch.tensor(0, device=self.device)
 
         self.commands = torch.zeros((self.num_envs, 3), device=self.device)
 
@@ -193,7 +195,7 @@ class BaseAgent(VecEnv):
         Args:
             idxs (Union[torch.Tensor, List[int], int]): idxs of environments whose commands should be randomized
         """
-        result = torch.zeros((count, 3), device=self.device)\
+        result = torch.zeros((count, 3), device=self.device)
 
         biased_curriculum_factor = self.get_biased_curriculum_factor()
 
@@ -203,8 +205,8 @@ class BaseAgent(VecEnv):
         ang_upper = ang_avg + ang_range / 2
         ang_lower = ang_avg - ang_range / 2
 
-        mag_upper = self.command_mag_upper * biased_curriculum_factor
-        mag_lower = self.command_mag_lower * biased_curriculum_factor
+        mag_upper = self.command_mag_upper
+        mag_lower = self.command_mag_lower
 
         ang_vel_upper = self.command_ang_vel_upper * biased_curriculum_factor
         ang_vel_lower = self.command_ang_vel_lower * biased_curriculum_factor

@@ -73,11 +73,11 @@ class WildAnymalReward:
         reward_log['lin_ortho_reward'] = lin_ortho_reward
         reward += lin_ortho_reward
 
-        body_motion_reward = self.reward_scales.body_motion * \
-            body_motion(v_act[:, 2], w_act[:, 0], w_act[:, 1])
+        # body_motion_reward = self.reward_scales.body_motion * \
+        #     body_motion(v_act[:, 2], w_act[:, 0], w_act[:, 1])
 
-        reward_log['body_motion_reward'] = body_motion_reward
-        reward += body_motion_reward
+        # reward_log['body_motion_reward'] = body_motion_reward
+        # reward += body_motion_reward
 
         # is the foot height measured from the ground or from the body?
         # currrent implimentation is that is is measured from the body, ie foot 0.2m above ground would produce a value of -0.2
@@ -86,10 +86,10 @@ class WildAnymalReward:
         h = self.env.get_rb_position(
         )[:, self.robot_config.foot_indices, 2]
 
-        foot_clearance_reward = self.reward_scales.foot_clearance * \
-            foot_clearance(h)
-        reward_log['foot_clearance_reward'] = foot_clearance_reward
-        reward += foot_clearance_reward
+        # foot_clearance_reward = self.reward_scales.foot_clearance * \
+        #     foot_clearance(h)
+        # reward_log['foot_clearance_reward'] = foot_clearance_reward
+        # reward += foot_clearance_reward
 
         # set joint velocities. If no joint history exists, set to zero
         joint_velocities = self.env.get_joint_velocity()
@@ -112,8 +112,8 @@ class WildAnymalReward:
             straight_knee(robot=self.robot_config,
                           dof_pos=joint_positions, thold=self.knee_threshold)
 
-        reward_log['straight_knee_reward'] = straight_knee_reward
-        reward += straight_knee_reward
+        # reward_log['straight_knee_reward'] = straight_knee_reward
+        # reward += straight_knee_reward
         # knee_joint_positions = joint_positions[:,
         #                                        self.robot_config.knee_indices]
         # joint_constraints_reward = self.reward_scales.joint_constraints * \
@@ -130,8 +130,8 @@ class WildAnymalReward:
         target_smoothness_reward = self.reward_scales.target_smoothness * target_smoothness(
             joint_positions, joint_target_t_1, joint_target_t_2, curriculum_factor)
 
-        reward_log['target_smoothness_reward'] = target_smoothness_reward
-        reward += target_smoothness_reward
+        # reward_log['target_smoothness_reward'] = target_smoothness_reward
+        # reward += target_smoothness_reward
 
         # update joint target history
         joint_target_t_2 = joint_target_t_1
@@ -142,8 +142,8 @@ class WildAnymalReward:
         torque_reward_val = self.reward_scales.torque * \
             torque_reward(torques, curriculum_factor)
 
-        reward_log['torque_reward'] = torque_reward_val
-        reward += torque_reward_val
+        # reward_log['torque_reward'] = torque_reward_val
+        # reward += torque_reward_val
 
         # get what feet are in contact with the ground
         feet_contact = self.env.get_contact_states(

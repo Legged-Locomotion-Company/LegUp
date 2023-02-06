@@ -4,13 +4,13 @@ import wandb
 class WandBWrapper:
     def __init__(self, config, resume=False, resume_id=None):
         self.config = config
-        wandb.init(project="LegUp", config=config, entity="legged-locomotion-company",
+        wandb.init(project="Not LegUp", config=config, entity="mlvovsky",
                    sync_tensorboard=True, monitor_gym=True, save_code=True, resume=resume, id=resume_id)
 
         self.id = wandb.run.id
 
     def recover(self):
-        wandb.init(project="LegUp", config=self.config, entity="legged-locomotion-company",
+        wandb.init(project="Not LegUp", config=self.config, entity="mlvovsky",
                    sync_tensorboard=True, monitor_gym=True, save_code=True, resume=True, id=self.wandb_id)
 
     def finish(self):

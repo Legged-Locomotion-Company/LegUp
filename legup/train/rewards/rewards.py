@@ -292,6 +292,8 @@ def clip(actions: torch.Tensor, clip_value: float, curriculum_factor: float = 1.
 def straight_knee(robot: Robot, dof_pos: torch.Tensor, thold: float, scale: float = 1.0) -> torch.Tensor:
     knee_positions = dof_pos[:, robot.knee_indices]
 
+    remainder_absolute_knee_positions = knee_positions.remainder(2*torch.pi)
+
     absolute_knee_positions_violations = (
         knee_positions.abs() - thold).clamp(max=0.0)
 
