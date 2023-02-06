@@ -159,7 +159,7 @@ class IsaacGymEnvironment:
         local_velocity = quat_rotate_inverse(
             self.root_rotation, self.root_lin_vel)
 
-        return self.root_lin_vel
+        return local_velocity
 
     def get_angular_velocity(self) -> torch.Tensor:
         """Gets the root angular velocity of each robot
