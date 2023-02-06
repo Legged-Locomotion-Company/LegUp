@@ -8,6 +8,8 @@ import numpy as np
 import torch
 import pytorch3d.transforms.rotation_conversions as R
 
+from isaacgym.torch_utils import quat_rotate_inverse
+
 
 class IsaacGymEnvironment:
     """Interfaces with IsaacGym to handle all of the simulation, and provides an API to get simulation properties and move the robot.
@@ -154,6 +156,9 @@ class IsaacGymEnvironment:
         Returns:
             torch.Tensor: shape `(num_environments, 3)`
         """
+        local_velocity = quat_rotate_inverse(
+            self.root_rotation, self.root_lin_vel)
+
         return self.root_lin_vel
 
     def get_angular_velocity(self) -> torch.Tensor:
