@@ -1,2 +1,0 @@
-# Usage
-This folder is meant to hold the different configuration files for training. They are modular and composable using [Hydra](https://hydra.cc/docs/intro/). To read aboutthe motivation behind Hydra and some basic examples of how it works see [this](https://medium.com/pytorch/hydra-a-fresh-look-at-configuration-for-machine-learning-projects-50583186b710) document by the PyTorch team.
