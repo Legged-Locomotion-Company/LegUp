@@ -14,11 +14,14 @@ class IsaacGymEnvironment(AbstractEnv):
         self.sim = IsaacGymFactory.create_sim()
         self.assets = IsaacGymFactory.create_assets()
         self.envs, self.actors = IsaacGymFactory.create_actors()
+        self.camera_handle = IsaacGymFactory.create_camera()
 
-        self.all_env_index = torch.arange(num_environments).to(torch.long).to(self.device)
+        self.all_env_index = torch.arange(num_environments, dtype=torch.long, device=self.device) # TODO: this should be num_agents, not num_envs
+        self.terminated_agents = torch.ones(num_environments, dtype=torch.bool, device=self.device) # TODO: this should be num_agents, not num_envs
+        self.dones = torch.zeros(num_environments, dtype=torch.bool, device=self.device) # TODO: this should be num_agents, not num_envs
 
         self.gym.prepare_sim(self.sim)
-        self.dyn = IsaacGymDynamics()
+        self.dyn = IsaacGymDynamics(self.sim, self.gym, num_agents)
 
     def step(self, actions: Optional[torch.Tensor] = None):
         """Moves robots using `actions`, steps the simulation forward, updates graphics, and refreshes state tensors
@@ -26,7 +29,8 @@ class IsaacGymEnvironment(AbstractEnv):
             actions (torch.Tensor, optional): target joint positions to command each robot, shape `(num_environments, num_degrees_of_freedom)`. 
                 If none, robots are commanded to the default joint position provided earlier Defaults to None.
         """
-
+        
+        actions = self.agent.make_actions(actions)
         actions = gymtorch.unwrap_tensor(actions if actions is not None else self.command_dof_pos)    
 
         self.gym.set_dof_position_target_tensor(self.sim, actions)
@@ -36,6 +40,37 @@ class IsaacGymEnvironment(AbstractEnv):
         self.gym.step_graphics(self.sim)
         self.gym.render_all_camera_sensors(self.sim)
 
+        # TODO: reset any previously terminated environments
+        self.reset_terminated_agents()
+        self.agent.update_commands(self.dones)
+
+        self.dyn.apply_tensor_changes()
+        self.dyn.refresh_buffers()
+
+        # TODO: post physics step
+        self.agent.post_physics_step()
+
+        observation = self.agent.make_observation()
+        reward = self.agent.make_reward()
+
+        term_idxs = self.agent.find_terminated()
+        self.terminated_agents[term_idxs] = True
+
+        infos = {}
+        return observation, reward, self.dones, infos
+
+    def reset_terminated_agents(self):
+        update_idx = self.all_env_index[self.terminated_agents]
+        self.dyn.get_position()[update_idx, :] = self.agent.sample_new_position(update_idx)
+        self.dyn.get_linear_velocity()[update_idx, :] = 0
+        self.dyn.get_angular_velocity()[update_idx, :] = 0
+        self.dyn.get_rotation()[update_idx, :] = self.agent.sample_new_quaternion(update_idx)
+        self.dyn.get_joint_position()[update_idx, :] = self.default_dof_pos
+        self.dyn.get_joint_velocity()[update_idx, :] = 0
+
+        self.dones[:] = self.terminated_agents
+        self.terminated_agents[:] = False
+        
     def render(self) -> torch.Tensor:
         """Gets an image of the environment from the camera and returns it
         Returns:
@@ -43,32 +78,3 @@ class IsaacGymEnvironment(AbstractEnv):
         """
         pass # TODO
         # return self.gym.get_camera_image(self.sim, self.env_actor_handles[self.camera_env][0], self.camera_handle, gymapi.IMAGE_COLOR).reshape(self.cam_height, self.cam_width, 4)
-
-    def reset(self, env_index: Optional[List[int]] = None):
-        """Resets the specified robot. Specifically, it will move it to a random position, give it zero velocity, and drop it from a height of 0.28 meters.
-        Args:
-            env_index (list, torch.Tensor, optional): Indices of environments to reset. If none, all environments are reset. Defaults to None.
-        """
-        if env_index is None:
-            env_index = self.all_env_index
-        else:
-            env_index = self.all_env_index[env_index]
-
-        random_pos = torch.rand(len(env_index), 3) * 2
-        random_pos[:, 2] = 0.40
-
-        # TODO: make faster for cuda?
-        random_rot = torch.zeros(len(env_index), 3)
-        random_rot[:] = agent.sample_new_quat(env_index) 
-
-        idx_tensor = env_index.long()  # why can't I index with int32 tensors :(
-        self.root_position[idx_tensor, :] = random_pos.to(self.device)
-        self.root_lin_vel[idx_tensor, :] = 0
-        self.root_ang_vel[idx_tensor, :] = 0
-        self.root_rotation[idx_tensor, :] = random_rot.to(self.device)
-        self.dof_pos[idx_tensor, :] = self.default_dof_pos
-        self.dof_vel[idx_tensor, :] = 0
-
-        indices = gymtorch.unwrap_tensor(env_index)
-        self.gym.set_dof_state_tensor_indexed(
-            self.sim,  gymtorch.unwrap_tensor(self.dof_states), indices, len(env_index))
