@@ -195,3 +195,11 @@ class IsaacGymDynamics(AbstractDynamics):
             torch.Tensor: shape `(num_agents, num_rigid_bodies, 3)`
         """
         return self.net_contact_forces
+
+    def get_num_agents(self) -> int:
+        """Gets number of agents in the entire simulation
+
+        Returns:
+            int: number of agents running
+        """
+        return self.num_agents

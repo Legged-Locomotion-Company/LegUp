@@ -1,80 +1,104 @@
 from isaacgym import gymapi, gymtorch
 
 import torch
+import numpy as np
 from typing import List, Optional
 
-from legup.common.abstract_env import AbstractEnv
+from legup.common.abstract_agent import AbstractAgent
+from legup.common.abstract_env import AbstractEnv, StepResult
 from legup.environment.isaac.factory import IsaacGymFactory
 from legup.environment.isaac.dynamics import IsaacGymDynamics
+from legup.common.legup_config import IsaacConfig, AgentConfig
+from legup.agents.wild_anymal_agent.wild_anymal_agent import WildAnymalAgent
 
 
 class IsaacGymEnvironment(AbstractEnv):
-    def __init__(self):
+    def __init__(self, env_config: IsaacConfig, agent_config: AgentConfig, device: torch.device):
+        num_agents = env_config.num_agents_per_env * env_config.num_envs_per_terrain_type * env_config.num_terrain
+        self.agent = WildAnymalAgent(agent_config, None, num_agents, env_config.sim_config.dt, device)
+        self.config = env_config
+
+        self.all_agent_index = torch.arange(num_agents, dtype=torch.long, device=device)
+        self.terminated_agents = torch.ones(num_agents, dtype=torch.bool, device=device)
+        self.dones = torch.zeros(num_agents, dtype=torch.bool, device=device)
+
         self.gym = gymapi.acquire_gym()
-        self.sim = IsaacGymFactory.create_sim()
-        self.assets = IsaacGymFactory.create_assets()
-        self.envs, self.actors = IsaacGymFactory.create_actors()
-        self.camera_handle = IsaacGymFactory.create_camera()
-
-        self.all_env_index = torch.arange(num_environments, dtype=torch.long, device=self.device) # TODO: this should be num_agents, not num_envs
-        self.terminated_agents = torch.ones(num_environments, dtype=torch.bool, device=self.device) # TODO: this should be num_agents, not num_envs
-        self.dones = torch.zeros(num_environments, dtype=torch.bool, device=self.device) # TODO: this should be num_agents, not num_envs
-
+        self.sim = IsaacGymFactory.create_sim(env_config)
+        self.assets = IsaacGymFactory.create_assets(env_config)
+        self.envs, self.actors = IsaacGymFactory.create_actors(env_config)
+        self.camera_handle = IsaacGymFactory.create_camera(env_config)
         self.gym.prepare_sim(self.sim)
-        self.dyn = IsaacGymDynamics(self.sim, self.gym, num_agents)
 
-    def step(self, actions: Optional[torch.Tensor] = None):
+        self.dyn = IsaacGymDynamics(self.sim, self.gym, num_agents)        
+
+
+    def step(self, actions: torch.Tensor) -> StepResult:
         """Moves robots using `actions`, steps the simulation forward, updates graphics, and refreshes state tensors
+
         Args:
-            actions (torch.Tensor, optional): target joint positions to command each robot, shape `(num_environments, num_degrees_of_freedom)`. 
-                If none, robots are commanded to the default joint position provided earlier Defaults to None.
+            actions (torch.Tensor): raw network outputs to convert into DOF pos and send through environment
+
+        Returns:
+            StepResult: new observation, corresponding rewards, and which environments have terminated
         """
-        
+
+        # compute actions and send to environment
         actions = self.agent.make_actions(actions)
-        actions = gymtorch.unwrap_tensor(actions if actions is not None else self.command_dof_pos)    
+        self.gym.set_dof_position_target_tensor(
+            self.sim, gymtorch.unwrap_tensor(actions))
 
-        self.gym.set_dof_position_target_tensor(self.sim, actions)
-
+        # step in simulation environment
         self.gym.simulate(self.sim)
         self.gym.fetch_results(self.sim, True)
         self.gym.step_graphics(self.sim)
         self.gym.render_all_camera_sensors(self.sim)
 
-        # TODO: reset any previously terminated environments
+        # reset any agents that have terminated
         self.reset_terminated_agents()
-        self.agent.update_commands(self.dones)
+        self.agent.reset_agents(self.dones)
 
         self.dyn.apply_tensor_changes()
         self.dyn.refresh_buffers()
 
-        # TODO: post physics step
         self.agent.post_physics_step()
 
-        observation = self.agent.make_observation()
-        reward = self.agent.make_reward()
+        observation = self.agent.make_observation(self.dyn)
+        rewards, reward_dict = self.agent.make_reward(self.dyn)
 
-        term_idxs = self.agent.find_terminated()
+        term_idxs = self.agent.find_terminated(self.dyn)
         self.terminated_agents[term_idxs] = True
 
-        infos = {}
-        return observation, reward, self.dones, infos
+        return StepResult(observation, rewards, self.dones, reward_dict)
 
     def reset_terminated_agents(self):
-        update_idx = self.all_env_index[self.terminated_agents]
-        self.dyn.get_position()[update_idx, :] = self.agent.sample_new_position(update_idx)
+        update_idx = self.all_agent_index[self.terminated_agents]
+        num_updates = len(update_idx)
+
+        self.dyn.get_position()[update_idx, :] = self.agent.sample_new_position(
+            num_updates)
         self.dyn.get_linear_velocity()[update_idx, :] = 0
         self.dyn.get_angular_velocity()[update_idx, :] = 0
-        self.dyn.get_rotation()[update_idx, :] = self.agent.sample_new_quaternion(update_idx)
-        self.dyn.get_joint_position()[update_idx, :] = self.default_dof_pos
+        self.dyn.get_rotation()[update_idx, :] = self.agent.sample_new_quaternion(
+            num_updates)
+        self.dyn.get_joint_position(
+        )[update_idx, :] = self.agent.sample_new_joint_pos(num_updates)
         self.dyn.get_joint_velocity()[update_idx, :] = 0
 
         self.dones[:] = self.terminated_agents
         self.terminated_agents[:] = False
-        
-    def render(self) -> torch.Tensor:
+
+    def render(self) -> np.ndarray:
         """Gets an image of the environment from the camera and returns it
         Returns:
             np.ndarray: RGB image, shape `(camera_height, camera_width, 4)`
         """
-        pass # TODO
-        # return self.gym.get_camera_image(self.sim, self.env_actor_handles[self.camera_env][0], self.camera_handle, gymapi.IMAGE_COLOR).reshape(self.cam_height, self.cam_width, 4)
+
+        cam_config = self.config.camera_config
+        render_target = self.envs[cam_config.render_target]
+        captured_image = self.gym.get_camera_image(
+            self.sim, render_target, self.camera_handle, gymapi.IMAGE_COLOR)
+        captured_image = captured_image.reshape(
+            cam_config.capture_height, cam_config.capture_width, 4)
+
+        # TODO: draw dyn information onto image
+        return captured_image

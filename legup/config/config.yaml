@@ -1,5 +1,7 @@
 eval: False
+headless: True
 
 defaults:
   - environment: basic_env
   - agent: anymal_default
+  - rl: default_ppo

@@ -1,0 +1,2 @@
+# dt = 1/cfg.dt, since we cannot specify fractions in yaml
+dt: 60

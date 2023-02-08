@@ -1,0 +1,26 @@
+env_name: anymal
+tensorboard_log_dir: ./anymal_train_tb
+command: [1.0, 0.0, 0.0]
+turn_command: 0.0
+knee_threshold: [0.5, 0.5, 0.5, 0.5]
+max_torque: 20
+# 3pi/2
+max_tilt: 4.71239
+
+clip_bias: 0.3
+
+pos_delta_clip: 0.1
+phase_delta_clip: 0.25
+
+reward_scales:
+  velocity: 0.75
+  body_motion: 0.1
+  foot_clearance: 0.003
+  shank_knee_col: 0.1
+  joint_velocities: 0.001
+  joint_constraints: 0.08
+  target_smoothness: 0.003
+  torque: 0.000025
+  slip: 0.003
+  pos_delta_clip: 0.01
+  phase_clip: 0.01

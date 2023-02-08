@@ -1,9 +1,16 @@
-from abc import ABC, abstractmethod
-
-import gym
 import torch
-import numpy as np
-from typing import Optional, List
+from dataclasses import dataclass
+from abc import ABC, abstractmethod
+from typing import Optional, List, Dict, Any
+
+@dataclass
+class StepResult:
+    """A class to store ther result of a step in the environment.
+    This is a very thin class which only stores the observation, dones and infos for type checking reasons."""
+    observation: torch.Tensor
+    rewards: torch.Tensor
+    dones: torch.Tensor
+    infos: Dict[str, Any]
 
 class AbstractEnv:
     @abstractmethod

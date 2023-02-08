@@ -4,6 +4,7 @@ from typing import Dict, Any
 
 from abc import ABC, abstractmethod
 
+
 class AbstractDynamics(ABC):
     @abstractmethod
     def get_position(self) -> torch.Tensor:
@@ -108,5 +109,14 @@ class AbstractDynamics(ABC):
         """Gets the contact forces action on each rigid body
         Returns:
             torch.Tensor: shape `(num_environments, num_rigid_bodies, 3)`
+        """
+        pass
+    
+    @abstractmethod
+    def get_num_agents(self) -> int:
+        """Gets number of agents in the entire simulation
+
+        Returns:
+            int: number of agents running
         """
         pass
