@@ -146,8 +146,8 @@ class WildAnymalAgent(AbstractAgent):
         # return (is_collided + is_tilted + is_exceeding_torque).bool()
         return (is_collided + is_exceeding_torque).bool()
 
-    def sample_new_position(self, num_positions: int) -> torch.Tensor:
-        return super().sample_new_position(num_positions)
+    def sample_new_position(self, num_positions: int, pos_lower: Tuple[int, int, int], pos_upper: Tuple[int, int, int]) -> torch.Tensor:
+        return super().sample_new_position(num_positions, pos_lower, pos_upper)
 
     def sample_new_quaternion(self, num_quaternions: int) -> torch.Tensor:
         return super().sample_new_quaternion(num_quaternions)

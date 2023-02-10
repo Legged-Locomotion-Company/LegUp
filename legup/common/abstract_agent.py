@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from typing import Tuple, Optional, List, Any
 
 from legup.common.abstract_dynamics import AbstractDynamics
-
+from legup.common.abstract_terrain import AbstractTerrain
 
 class AbstractAgent(ABC):
     """An abstract class for agents to inherit."""
@@ -13,7 +13,8 @@ class AbstractAgent(ABC):
         if device is None:
             device = robot.device
         elif device != robot.device:
-            raise ValueError(f"Robot device {robot.device} does not match agent device {device}!")
+            raise ValueError(
+                f"Robot device {robot.device} does not match agent device {device}!")
 
         self.robot = robot
         self.config = config
@@ -21,9 +22,8 @@ class AbstractAgent(ABC):
 
         self.num_agents = num_agents
         self.dt = dt
-        self.ep_lens = torch.zeros(self.num_agents, device=self.device, dtype=torch.int16)
-
-
+        self.ep_lens = torch.zeros(
+            self.num_agents, device=self.device, dtype=torch.int16)
 
     @abstractmethod
     def make_actions(self, actions: torch.Tensor) -> torch.Tensor:
@@ -91,11 +91,13 @@ class AbstractAgent(ABC):
         pass
 
     @abstractmethod
-    def sample_new_position(self, num_positions: int) -> torch.Tensor:
+    def sample_new_position(self, num_positions: int, pos_lower: Tuple[int, int, int], pos_upper: Tuple[int, int, int]) -> torch.Tensor:
         """Called when the environment needs to sample new positions for robot root
 
         Args: 
             num_positions (int): number of positions to sample
+            pos_lower (Tuple[int, int, int]): lower bound of space that can be sampled
+            pos_upper (Tuple[int, int, int]): upper bound of space that can be sampled
 
         Returns: 
             torch.Tensor: returns sampled positions of shape `(num_agents, 3)`
@@ -125,7 +127,7 @@ class AbstractAgent(ABC):
             torch.Tensor: new joint positions of shape `(num_pos, num_dof)`
         """
 
-    def generate_new_terrain(self, num_terrains: int) -> Optional[List[Any]]:
+    def generate_new_terrain(self, num_terrains: int) -> Optional[List[AbstractTerrain]]:
         """Called after every rollout to check if the environment should change its terrain
 
         Args:
@@ -135,4 +137,3 @@ class AbstractAgent(ABC):
             Optional[List[Any]]: None if no change, new terrain configurations otherwise
         """
         return None
-

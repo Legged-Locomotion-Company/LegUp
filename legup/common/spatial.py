@@ -18,6 +18,7 @@ class Transform(TensorWrapper):
             raise ValueError("Transform matrix must be of shape (4, 4).")
         super().__init__(transform_tensor, end_dims=2)
 
+    @torch.jit.script # type: ignore
     def compose(self, other: "Transform", out: Optional["Transform"]) -> "Transform":
         """Composes two transforms.
         """
@@ -57,7 +58,7 @@ Raw Torch Operations
 """
 
 
-@torch.jit.script
+@torch.jit.script  # type: ignore
 def normalize_tensor(in_tensor: torch.Tensor, dim: int):
     """Normalizes a tensor along a given dimension.
 
