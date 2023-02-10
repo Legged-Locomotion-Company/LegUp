@@ -1,5 +1,6 @@
+import torch
 import numpy as np
-from isaacgym import gymapi
+from isaacgym import gymapi, terrain_utils
 
 from legup.common.legup_config import IsaacConfig
 from legup.common.abstract_agent import AbstractAgent
@@ -36,8 +37,39 @@ class IsaacGymFactory:
 
     @staticmethod
     def create_terrain(sim, gym, agent: AbstractAgent, config: IsaacConfig):
+
+        '''
+            - each environment has a width of config.env_spacing and height of config.env_spacing
+            - should probably add some border to each environment too
+            - this is scaled with the horizontal scaling to get the number of points it represents in the heightmap
+            - this heightmap is populated using the terrain_utils functions
+            - and then converted to a triangle mesh with terrain_utils
+        '''
+        num_envs = config.num_envs_per_terrain_type * config.num_terrain # total number of environments/patches in simulation
+        num_columns = int(np.sqrt(num_envs)) # since we have a square quilt, this is the side length
+        num_rows = int(np.ceil(num_envs / num_columns)) # since we have a square quilt, this is the side width
+
+        patch_width = 2 * config.env_spacing / config.horizontal_terrain_scale
+        border_size = 2 * config.terrain_border / config.horizontal_terrain_scale
+        terrain_len_columns = num_columns * patch_width + border_size
+        terrain_len_rows = num_rows * patch_width + border_size
+
+        heightfield = np.zeros((terrain_len_columns, terrain_len_rows), dtype = np.int16)
         
-        return None
+        # idxs = np.unravel_index(np.arange(num_envs), (num_columns, num_rows))
+        # for cx, cy in zip(*idxs):
+        #     heightfield[cx, cy]
+        
+
+        # vertices, triangles = convert_heightfield_to_trimesh(heightfield, horizontal_scale=horizontal_scale, vertical_scale=vertical_scale, slope_threshold=1.5)
+        # tm_params = gymapi.TriangleMeshParams()
+        # tm_params.nb_vertices = vertices.shape[0]
+        # tm_params.nb_triangles = triangles.shape[0]
+        # tm_params.transform.p.x = -1.
+        # tm_params.transform.p.y = -1.
+        # gym.add_triangle_mesh(sim, vertices.flatten(), triangles.flatten(), tm_params)
+
+        return heightfield
 
     @staticmethod
     def create_actors(sim, gym, agent: AbstractAgent, config: IsaacConfig):

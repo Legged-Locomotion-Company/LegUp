@@ -77,12 +77,14 @@ class CameraConfig:
     draw_command: bool
 @dataclass
 class IsaacConfig:
-    env_spacing: int
+    env_spacing: float
     num_agents_per_env: int # env = patch
     num_envs_per_terrain_type: int
-    num_terrain: int
 
-    # terrain_config: Optional[List[TerrainConfig]]
+    num_terrain: int
+    terrain_border: int
+    vertical_terrain_scale: float
+    horizontal_terrain_scale: float
 
     asset_config: AssetConfig
     sim_config: SimulationConfig

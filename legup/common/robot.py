@@ -1,5 +1,5 @@
-from tensor_wrapper import TensorWrapper
-from spatial import Transform, Screw, Position, Direction
+from legup.common.tensor_wrapper import TensorWrapper
+from legup.common.spatial import Transform, Screw, Position, Direction
 
 from typing import List, Optional, overload, Union, Dict
 from abc import ABC, abstractmethod
@@ -8,7 +8,6 @@ import xml.etree.ElementTree as ET
 
 import torch
 
-@torch.jit.script  # type: ignore
 class RobotJointAngles(TensorWrapper):
     def __init__(self, robot: "Robot", joint_angles_tensor: torch.Tensor):
         """Factory that creates joint angles class for a robot.
@@ -104,7 +103,6 @@ class RobotJoint(ABC):
 
 
 class RevoluteJoint(RobotJoint):
-    @torch.jit.script
     def __init__(self, origin: Position, axis: Direction):
         """Creates a revolute joint.
 
@@ -130,5 +128,5 @@ class RevoluteJoint(RobotJoint):
 ###### TENSOR OPERATIONS ######
 
 
-@ torch.jit.script
-def
+# @ torch.jit.script
+# def
