@@ -11,6 +11,11 @@ class Position(TensorWrapper):
             raise ValueError("Position vector must be of shape (3,).")
         super().__init__(position_tensor, end_shape=[3])
 
+    def compose(self, other: "Position") -> "Position":
+        """Composes two positions."""
+
+        return Position(self.tensor + other.tensor)
+
 
 class Rotation(TensorWrapper):
     def __init__(self, rotation_tensor: torch.Tensor):
@@ -22,6 +27,38 @@ class Rotation(TensorWrapper):
     def empty_rotation(*shape, device):
         rotation_tensor = torch.empty((*shape, 3, 3), device=device)
         return Rotation(rotation_tensor)
+
+    def compose(self, other: "Rotation") -> "Rotation":
+        """Composes two rotations."""
+
+        return Rotation(self.tensor @ other.tensor)
+
+    def inverse(self) -> "Rotation":
+        """Computes the inverse of a rotation."""
+
+        return Rotation(self.tensor.transpose(-1, -2))
+
+    @staticmethod
+    @torch.jit.script  # type: ignore
+    def _raw_log_map(rotation_tensor: torch.Tensor):
+        """Computes the log map of a rotation."""
+
+        # Compute the trace of the rotation matrix.
+        trace = torch.trace(rotation_tensor)
+
+        # Compute the angle of rotation.
+        angle = torch.acos((trace - 1) / 2)
+
+        # Compute the skew matrix of the rotation.
+        skew = (rotation_tensor - rotation_tensor.transpose(-1, -2)) / 2
+
+        # Compute the axis of rotation.
+        axis = skew / torch.sin(angle)
+
+        # Compute the log map.
+        log_map = angle * axis
+
+        return log_map
 
 
 class Twist(TensorWrapper):
@@ -38,7 +75,7 @@ class Twist(TensorWrapper):
         return TwistSkew(skew_matrix_tensor)
 
     @staticmethod
-    @torch.jit.script
+    @torch.jit.script  # type: ignore
     def _raw_tensor_skew(twist_tensor: torch.Tensor):
         """Converts the raw twist tensor to a skew matrix tensor"""
 
@@ -65,12 +102,12 @@ class TwistSkew(TensorWrapper):
         """Computes the unskew vector of a twist skew matrix."""
 
         # Construct the unskew vector.
-        unskew_vec = TwistSkew._raw_tensor_unskew()
+        unskew_vec = TwistSkew._raw_tensor_unskew(self.tensor)
 
         return Twist(unskew_vec)
 
     @staticmethod
-    @torch.jit.script
+    @torch.jit.script  # type: ignore
     def _raw_tensor_unskew(twist_skew_tensor: torch.Tensor) -> torch.Tensor:
         """Computes the unskew vector of a twist skew matrix."""
 
@@ -84,7 +121,7 @@ class TwistSkew(TensorWrapper):
 
         return twist_unskew_tensor
 
-    @torch.jit.script
+    @torch.jit.script  # type: ignore
     def _raw_tensor_exp_map(twist_skew_tensor: torch.Tensor) -> torch.Tensor:
         """Computes the exponential map of a twist skew matrix."""
 
@@ -139,7 +176,7 @@ class Screw(TensorWrapper):
         super().__init__(screw_vec_tensor, end_shape=[6])
 
     def empty_screw(*shape, device):
-        screw_tensor = torch.empty((*shape, 6), device=device)
+        screw_tensor = torch.empty(list((*shape, 6)), device=device)
         return Screw(screw_tensor)
 
     def exp_map(self) -> Transform:
@@ -149,25 +186,6 @@ class Screw(TensorWrapper):
 """
 Raw Torch Operations
 """
-
-
-@torch.jit.script
-def unsqueeze_to_broadcast(tensor: TensorWrapper, new_pre_shape: List[int]):
-    """Unsqueezes a tensor to broadcast with another tensor."""
-
-    # Unsqueeze the tensor.
-    for _ in range(len(new_pre_shape) - len(tensor.pre_shape)):
-
-        tensor.tensor = tensor.tensor.unsqueeze(-1)
-
-    return tensor
-
-
-@torch.jit.script
-def unsqueeze_to_broadcast_tensors(a: TensorWrapper, b: TensorWrapper):
-    """Unsqueezes a tensor to broadcast with another tensor."""
-
-    raise NotImplementedError("Unsqueeze to broadcast tensors not implemented.")
 
 
 @torch.jit.script  # type: ignore
