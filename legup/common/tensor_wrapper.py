@@ -16,23 +16,23 @@ class TensorWrapper:
         self.tensor[index] = value
 
     def pre_shape(self) -> List[int]:
-        return self.tensor.shape[:-len(self.end_shape)]
+        return list(self.tensor.shape[:-len(self.end_shape)])
 
     def reshape(self, pre_shape: List[int]):
         return self.tensor.reshape(pre_shape + self.end_shape)
 
+    # No return type annotation because of dynamic return type.
     def to(self, device: torch.device):
         self.tensor = self.tensor.to(device)
         self.device = device
 
-    def unsqeeze_to_broadcast(self, new_pre_shape: List[int]) -> "TensorWrapper":
-        """Unsqueezes a tensor to broadcast with another tensor."""
+        return self
 
-        # Unsqueeze the tensor.
-        new_tensor = TensorWrapper._raw_tensor_unsqueeze_to_broadcast(
-            self.tensor, new_pre_shape, self.end_shape)
+    def unsqueeze_to_broadcast(self, new_pre_shape: List[int]) -> "TensorWrapper":
+        """Unsqueezes a tensor to broadcast to a shape which can be broadcast with another pre_shape."""
 
-        return type(self).__init__(new_tensor)
+        raise NotImplementedError(
+            "This method is not implemented for this class.")
 
     @staticmethod
     def unsqueeze_to_broadcast_tensors(a: "TensorWrapper", b: "TensorWrapper"):
@@ -40,20 +40,15 @@ class TensorWrapper:
 
         new_pre_shape = torch.broadcast_shapes(a.pre_shape(), b.pre_shape())
 
+        new_pre_shape = list(new_pre_shape)
+
         a_broad = a.unsqueeze_to_broadcast(new_pre_shape)
         b_broad = b.unsqueeze_to_broadcast(new_pre_shape)
 
         return a_broad, b_broad
 
     @staticmethod
-    @torch.jit.script
-    def _raw_tensor_unsqueeze_to_broadcast(tensor: torch.Tensor, new_pre_shape: List[int], end_shape: List[int]) -> torch.Tensor:
-        """Unsqueezes a tensor to broadcast with another tensor."""
+    def _default_device():
+        """Returns the default device for the current context."""
 
-        # Unsqueeze the tensor.
-        for _ in range(len(new_pre_shape) - len(tensor.pre_shape)):
-            for i in range(len(tensor.pre_shape)):
-                if tensor.pre_shape[i] != new_pre_shape[i]:
-                    tensor.tensor = tensor.tensor.unsqueeze(i)
-
-        return tensor
+        return torch.device("cuda" if torch.cuda.is_available() else "cpu")
