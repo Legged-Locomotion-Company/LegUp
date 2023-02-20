@@ -68,19 +68,23 @@ class SimulationConfig:
 class CameraConfig:
     capture_width: int
     capture_height: int
-    render_target: int
-    
+    render_target_env: int
+    render_target_actor: int
+
+    draw_collision_mesh: bool
     draw_position: bool
     draw_rotation: bool
     draw_command: bool
 @dataclass
 class IsaacConfig:
-    env_spacing: int
+    env_spacing: float
     num_agents_per_env: int # env = patch
     num_envs_per_terrain_type: int
-    num_terrain: int
 
-    # terrain_config: Optional[List[TerrainConfig]]
+    num_terrain: int
+    terrain_border: int
+    vertical_terrain_scale: float
+    horizontal_terrain_scale: float
 
     asset_config: AssetConfig
     sim_config: SimulationConfig

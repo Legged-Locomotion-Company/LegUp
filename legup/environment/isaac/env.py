@@ -2,9 +2,7 @@ from isaacgym import gymapi, gymtorch
 
 import torch
 import numpy as np
-from typing import List, Optional
 
-from legup.common.abstract_agent import AbstractAgent
 from legup.common.abstract_env import AbstractEnv, StepResult
 from legup.environment.isaac.factory import IsaacGymFactory
 from legup.environment.isaac.dynamics import IsaacGymDynamics
@@ -22,11 +20,11 @@ class IsaacGymEnvironment(AbstractEnv):
         self.terminated_agents = torch.ones(num_agents, dtype=torch.bool, device=device)
         self.dones = torch.zeros(num_agents, dtype=torch.bool, device=device)
 
-        self.gym = gymapi.acquire_gym()
-        self.sim = IsaacGymFactory.create_sim(env_config)
-        self.assets = IsaacGymFactory.create_assets(env_config)
-        self.envs, self.actors = IsaacGymFactory.create_actors(env_config)
-        self.camera_handle = IsaacGymFactory.create_camera(env_config)
+        self.gym = gymapi.acquire_gym() # type: ignore
+        self.sim = IsaacGymFactory.create_sim(self.gym, env_config)
+        self.heightfield = IsaacGymFactory.create_terrain(self.sim, self.gym, self.agent, env_config)
+        self.envs, self.actors, self.asset = IsaacGymFactory.create_actors(self.sim, self.gym, self.agent, env_config)
+        self.camera_handle = IsaacGymFactory.create_camera(self.sim, self.gym, env_config)
         self.gym.prepare_sim(self.sim)
 
         self.dyn = IsaacGymDynamics(self.sim, self.gym, num_agents)        
