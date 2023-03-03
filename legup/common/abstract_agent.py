@@ -1,29 +1,40 @@
 import torch
 from abc import ABC, abstractmethod
 from typing import Tuple, Optional, List, Any
+import warnings
+
+from omegaconf import DictConfig
 
 from legup.common.abstract_dynamics import AbstractDynamics
 from legup.common.abstract_terrain import AbstractTerrain
+from legup.common.robot import Robot
+
 
 class AbstractAgent(ABC):
     """An abstract class for agents to inherit."""
 
-    def __init__(self, config, robot, num_agents, dt, device: Optional[torch.device] = None):
+    def __init__(self,
+                 config: DictConfig,
+                 robot: Robot,
+                 dynamics: AbstractDynamics,
+                 num_agents: int,
+                 device: Optional[torch.device] = None):
 
         if device is None:
-            device = robot.device
-        elif device != robot.device:
-            raise ValueError(
-                f"Robot device {robot.device} does not match agent device {device}!")
+            device = torch.device(
+                "cuda" if torch.cuda.is_available() else "cpu")
+            warnings.warn(
+                f"No device specified, agent decided to use: {device}")
 
         self.robot = robot
         self.config = config
         self.device = device
 
         self.num_agents = num_agents
-        self.dt = dt
         self.ep_lens = torch.zeros(
             self.num_agents, device=self.device, dtype=torch.int16)
+
+        self.dynamics = dynamics
 
     @abstractmethod
     def make_actions(self, actions: torch.Tensor) -> torch.Tensor:
@@ -38,7 +49,7 @@ class AbstractAgent(ABC):
 
         pass
 
-    @abstractmethod
+    @ abstractmethod
     def reset_agents(self, terminated_agents: torch.Tensor) -> None:
         """Called right after reseting any terminated agents, use this to reset any local buffers and resample new commands
 
@@ -47,12 +58,12 @@ class AbstractAgent(ABC):
         """
         pass
 
-    @abstractmethod
+    @ abstractmethod
     def post_physics_step(self) -> None:
         """Called right after stepping in the environment, use this to update any local buffers"""
         pass
 
-    @abstractmethod
+    @ abstractmethod
     def make_observation(self, dynamics: AbstractDynamics) -> torch.Tensor:
         """Called to create a new observation from the environment
 
@@ -64,7 +75,7 @@ class AbstractAgent(ABC):
         """
         pass
 
-    @abstractmethod
+    @ abstractmethod
     def make_reward(self, dynamics: AbstractDynamics) -> Tuple[torch.Tensor, dict]:
         """Called to calculate rewards in the new environment
 
@@ -76,7 +87,7 @@ class AbstractAgent(ABC):
         """
         pass
 
-    @abstractmethod
+    @ abstractmethod
     def find_terminated(self, dynamics: AbstractDynamics) -> torch.Tensor:
         """Called when the environment needs to check which agents have terminated
 
@@ -90,25 +101,25 @@ class AbstractAgent(ABC):
         """
         pass
 
-    @abstractmethod
+    @ abstractmethod
     def sample_new_position(self, num_positions: int, pos_lower: Tuple[int, int, int], pos_upper: Tuple[int, int, int]) -> torch.Tensor:
         """Called when the environment needs to sample new positions for robot root
 
-        Args: 
+        Args:
             num_positions (int): number of positions to sample
             pos_lower (Tuple[int, int, int]): lower bound of space that can be sampled
             pos_upper (Tuple[int, int, int]): upper bound of space that can be sampled
 
-        Returns: 
+        Returns:
             torch.Tensor: returns sampled positions of shape `(num_agents, 3)`
         """
         pass
 
-    @abstractmethod
+    @ abstractmethod
     def sample_new_quaternion(self, num_quats: int) -> torch.Tensor:
         """Called when the environment needs to sample new quaternions for robot root
 
-        Args: 
+        Args:
             num_quats (int): number of quaternions to sample
 
         Returns:
@@ -116,7 +127,7 @@ class AbstractAgent(ABC):
         """
         pass
 
-    @abstractmethod
+    @ abstractmethod
     def sample_new_joint_pos(self, num_pos: int) -> torch.Tensor:
         """Called when the environment needs to sample new robot joint positions
 

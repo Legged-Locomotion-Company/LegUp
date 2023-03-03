@@ -110,6 +110,7 @@ class RL:
 class LegupConfig:
     eval: bool
     headless: bool
+    use_gpu: bool
 
     agent: AgentConfig
     env: IsaacConfig

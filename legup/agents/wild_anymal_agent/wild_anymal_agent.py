@@ -2,19 +2,28 @@ import torch
 
 from typing import Optional, Tuple
 
+from omegaconf import DictConfig
+
 from legup.common.abstract_agent import AbstractAgent
 from legup.common.abstract_dynamics import AbstractDynamics
+from legup.common.robot import Robot
+from legup.common.rewards import Reward
 
 
 
 class WildAnymalAgent(AbstractAgent):
-    def __init__(self, config, robot, num_agents, dt, device: Optional[torch.device] = None):
-        super().__init__(config, robot, num_agents, dt, device)
+    def __init__(self, config: DictConfig, robot: Robot, dynamics: AbstractDynamics, num_agents: int, device: Optional[torch.device] = None):
+        super().__init__(config=config, robot=robot, dynamics=dynamics, num_agents=num_agents, device=device)
         # TODO: add type hints here once the types are implemented
         # TODO: figure out how to get the device
 
         # TODO: add reward function shit here
-        self.reward_fn = config.reward_fn
+        self.robot = robot
+
+        self.reward_fn = Reward(
+            dynamics=self.dynamics,
+            robot=self.robot,
+            scale=self.config.scale)
 
 
     def make_actions(self, actions: torch.Tensor) -> torch.Tensor:
@@ -25,19 +34,19 @@ class WildAnymalAgent(AbstractAgent):
 
         if idx is not None:
             self.joint_pos_history[idx] = torch.zeros(
-                self.robot.num_joints, 3, device=self.device)
+                self.robot.num_dofs, 3, device=self.device)
             self.joint_vel_history[idx] = torch.zeros(
-                self.robot.num_joints, 2, device=self.device)
+                self.robot.num_dofs, 2, device=self.device)
             self.joint_target_history[idx] = torch.zeros(
-                self.robot.num_joints, 2, device=self.device)
+                self.robot.num_dofs, 2, device=self.device)
 
         else:
             self.joint_pos_history = torch.zeros(
-                self.num_agents, self.robot.num_joints, 3, device=self.device)
+                self.num_agents, self.robot.num_dofs, 3, device=self.device)
             self.joint_vel_history = torch.zeros(
-                self.num_agents, self.robot.num_joints, 2, device=self.device)
+                self.num_agents, self.robot.num_dofs, 2, device=self.device)
             self.joint_target_history = torch.zeros(
-                self.num_agents, self.robot.num_joints, 2, device=self.device)
+                self.num_agents, self.robot.num_dofs, 2, device=self.device)
 
     def phase_gen(self):
         cpg_freq = 4.0
@@ -101,14 +110,14 @@ class WildAnymalAgent(AbstractAgent):
         proprio[:, 120:133] = self.make_phase_observation()
 
         privil[:, :4] = dynamics.get_contact_states(
-        )[:, self.robot.foot_indices].to(torch.float)
+        )[:, self.robot.get_foot_link_indices()].to(torch.float)
 
         privil[:, 4:16] = dynamics.get_contact_forces(
-        )[:, self.robot.foot_indices, :].flatten(start_dim=1)
+        )[:, self.robot.foot_link_indices, :].flatten(start_dim=1)
         # privil[idx, 16:28] = self.env.get_contact_normals()
         # privil[idx, 28:32] = self.enc.get_frivtion_coeffs()
         privil[:, 32:40] = dynamics.get_contact_states()[
-            :, self.robot.shank_indices + self.robot.thigh_indices].to(torch.float)
+            :, self.robot.get_shank_link_indices() + self.robot.get_thigh_link_indices()].to(torch.float)
 
         # TODO: add airtime
 

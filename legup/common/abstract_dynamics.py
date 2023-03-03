@@ -47,12 +47,29 @@ class AbstractDynamics(ABC):
         pass
 
     @abstractmethod
+    def get_joint_position_hist(self) -> torch.Tensor:
+        """Gets the joint positions of each robot over the last few environment steps TODO decide oh a history length
+
+        Returns:
+            torch.Tensor: shape `(hist_length, num_environments, num_degrees_of_freedom)`. Index 0 is most recent, -1 is the oldest
+        """
+        pass
+
+    @abstractmethod
     def get_joint_velocity(self) -> torch.Tensor:
         """Gets the joint velocities of each robot
         Returns:
             torch.Tensor: shape `(num_environments, num_degrees_of_freedom)`
         """
         pass
+
+    @abstractmethod
+    def get_joint_velocity_hist(self) -> torch.Tensor:
+        """Gets the joint velocities of each robot over the last few environment steps TODO: decide on a hist length
+
+        Returns:
+            torch.Tensor: shape `(hist_length, num_environments, num_degrees_of_freedom)`. Index 0 is most recent, -1 is the oldest
+        """
 
     @abstractmethod
     def get_joint_torque(self) -> torch.Tensor:
@@ -111,12 +128,30 @@ class AbstractDynamics(ABC):
             torch.Tensor: shape `(num_environments, num_rigid_bodies, 3)`
         """
         pass
-    
+
     @abstractmethod
     def get_num_agents(self) -> int:
         """Gets number of agents in the entire simulation
 
         Returns:
             int: number of agents running
+        """
+        pass
+
+    @abstractmethod
+    def get_curriculum_factor(self) -> float:
+        """Gets the current curriculum factor
+
+        Returns:
+            float: curriculum factor
+        """
+        pass
+
+    @abstractmethod
+    def get_dt(self) -> float:
+        """Gets the current timestep
+
+        Returns:
+            float: timestep
         """
         pass

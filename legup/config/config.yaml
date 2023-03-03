@@ -1,5 +1,6 @@
 eval: False
 headless: True
+use_gpu: True
 
 defaults:
   - environment: basic_env

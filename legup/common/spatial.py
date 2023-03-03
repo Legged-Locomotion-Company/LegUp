@@ -10,6 +10,19 @@ Raw tensor functions
 
 
 @torch.jit.script  # type: ignore
+def _raw_screw_from_axis_origin(axis: torch.Tensor, origin: torch.Tensor):
+    """Constructs a raw screw tensor from an axis and origin."""
+
+    pre_shape = axis.shape[:-1]
+    screw = torch.empty(pre_shape + (6,), device=axis.device)
+
+    screw[..., :3] = axis
+    screw[..., 3:] = torch.cross(-axis, origin)
+
+    return screw
+
+
+@torch.jit.script  # type: ignore
 def _raw_twist_skew(twist_tensor: torch.Tensor):
     """Converts the raw twist tensor to a skew matrix tensor"""
 
@@ -28,7 +41,7 @@ def _raw_twist_skew(twist_tensor: torch.Tensor):
     return skew
 
 
-@ torch.jit.script  # type: ignore
+@torch.jit.script  # type: ignore
 def _raw_screw_skew(screw_tensor: torch.Tensor):
     """Converts the raw screw tensor to a skew matrix tensor"""
 
@@ -48,7 +61,7 @@ def _raw_screw_skew(screw_tensor: torch.Tensor):
     return result
 
 
-@ torch.jit.script  # type: ignore
+@torch.jit.script  # type: ignore
 def _raw_twist_unskew(twist_skew_tensor: torch.Tensor) -> torch.Tensor:
     """Computes the unskew vector of a twist skew matrix."""
 
@@ -85,7 +98,7 @@ def _raw_rotation_log_map(rotation_tensor: torch.Tensor):
     return log_map
 
 
-@ torch.jit.script  # type: ignore
+@torch.jit.script  # type: ignore
 def _raw_normalize_tensor(in_tensor: torch.Tensor, dim: int):
     """Normalizes a tensor along a given dimension.
 
@@ -99,7 +112,7 @@ def _raw_normalize_tensor(in_tensor: torch.Tensor, dim: int):
     return in_tensor / norms
 
 
-@ torch.jit.script  # type: ignore
+@torch.jit.script  # type: ignore
 def _raw_twist_skew_exp_map(twist_skew_tensor: torch.Tensor) -> torch.Tensor:
     """Computes the exponential map of a twist skew matrix.
         This is an implementation of equation 3.51 from Modern Robotics by Kevin Lynch."""
@@ -130,7 +143,7 @@ def _raw_twist_skew_exp_map(twist_skew_tensor: torch.Tensor) -> torch.Tensor:
     return exponential_map
 
 
-@ torch.jit.script  # type: ignore
+@torch.jit.script  # type: ignore
 def _raw_screw_skew_exp_map(screw_skew_tensor: torch.Tensor):
     """Converts the raw screw skew tensor to a log tensor
     Implementation of equation 3.88 from Modern Robotics by Kevin Lynch"""
@@ -168,7 +181,7 @@ def _raw_screw_skew_exp_map(screw_skew_tensor: torch.Tensor):
         masked_rotation_matrix = _raw_twist_skew_exp_map(
             masked_omega_skew_theta)
 
-        # Since we know that in all of these indeces ||omega|| == 1, we can just
+        # Since we know that in all of these indices ||omega|| == 1, we can just
         # say that theta = ||omega|| * theta
         masked_theta = omega_norm_theta[omega_norm_nonzero_mask]
 
@@ -236,7 +249,7 @@ class Rotation(TensorWrapper):
             raise ValueError("Rotation matrix must be of shape (3, 3).")
         super().__init__(rotation_tensor, end_shape=[3, 3])
 
-    @ staticmethod
+    @staticmethod
     def empty_rotation(*shape, device=None):
         if device is None:
             device = Rotation._default_device()
@@ -279,7 +292,7 @@ class Twist(TensorWrapper):
 
         return exp_map
 
-    @ staticmethod
+    @staticmethod
     def rand(*shape, device=None):
         if device is None:
             device = Twist._default_device()
@@ -349,6 +362,9 @@ class Transform(TensorWrapper):
     def log_map(self) -> "Screw":
         raise NotImplementedError("Log map not implemented.")
 
+    def get_position(self) -> Position:
+        return Position(self.tensor[..., :3, 3])
+
 
 class Direction(TensorWrapper):
     def __init__(self, direction_vec_tensor: torch.Tensor):
@@ -364,7 +380,7 @@ class Screw(TensorWrapper):
             raise ValueError("Screw vector must be of shape (6,).")
         super().__init__(screw_vec_tensor, end_shape=[6])
 
-    @ staticmethod
+    @staticmethod
     def empty_screw(shape: Sequence[int], device: Optional[torch.device] = None) -> "Screw":
         """Creates an empty screw.
 
@@ -384,7 +400,34 @@ class Screw(TensorWrapper):
         screw_tensor = torch.empty(list((*shape, 6)), device=device)
         return Screw(screw_tensor)
 
-    @ staticmethod
+    @staticmethod
+    def from_axis_and_origin(axis: Direction, origin: Position, device: Optional[torch.device] = None) -> "Screw":
+        """Creates a screw from an axis and an origin.
+
+        Args:
+            axis (Direction): The axis of the screw.
+            origin (Position): The origin of the screw.
+            device (torch.Device, optional): The device on which to create the screw. Defaults to None.
+
+        Returns:
+            Screw: a screw
+        """
+
+        if device is None:
+            device = Screw._default_device()
+
+        origin = origin.to(device)
+
+        if axis.pre_shape != origin.pre_shape:
+            raise ValueError(
+                f"Axis and origin must have the same pre-shape. Got {axis.pre_shape} and {origin.pre_shape} respectively.")
+
+        screw_tensor = _raw_screw_from_axis_origin(
+            axis.tensor.to(device), origin.tensor.to(device))
+
+        return Screw(screw_tensor)
+
+    @staticmethod
     def rand(*shape, device: Optional[torch.device] = None) -> "Screw":
         """Creates a random screw.
 

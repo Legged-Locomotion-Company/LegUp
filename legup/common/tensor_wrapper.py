@@ -1,6 +1,9 @@
-from typing import Iterable, List
+from typing import Iterable, List, TypeVar
 
 import torch
+
+TensorWrapperSubclass = TypeVar(
+    "TensorWrapperSubclass", bound="TensorWrapper")
 
 
 class TensorWrapper:
@@ -21,31 +24,21 @@ class TensorWrapper:
     def reshape(self, pre_shape: List[int]):
         return self.tensor.reshape(pre_shape + self.end_shape)
 
-    # No return type annotation because of dynamic return type.
-    def to(self, device: torch.device):
+    def to(self: TensorWrapperSubclass, device: torch.device) -> TensorWrapperSubclass:
+        """Moves the tensor to a device. This modifies the tensor, so other references to the tensor will be on the new device as well."""
         self.tensor = self.tensor.to(device)
         self.device = device
 
         return self
 
-    def unsqueeze_to_broadcast(self, new_pre_shape: List[int]) -> "TensorWrapper":
-        """Unsqueezes a tensor to broadcast to a shape which can be broadcast with another pre_shape."""
+    def view(self: TensorWrapperSubclass, shape: Iterable[int]) -> TensorWrapperSubclass:
+        if not isinstance(shape, list):
+            shape = list(shape)
 
-        raise NotImplementedError(
-            "This method is not implemented for this class.")
+        new_shape = shape + self.end_shape
+        new_raw_tensor = self.tensor.view(new_shape)
 
-    @staticmethod
-    def unsqueeze_to_broadcast_tensors(a: "TensorWrapper", b: "TensorWrapper"):
-        """Unsqueezes a tensor to broadcast with another tensor."""
-
-        new_pre_shape = torch.broadcast_shapes(a.pre_shape(), b.pre_shape())
-
-        new_pre_shape = list(new_pre_shape)
-
-        a_broad = a.unsqueeze_to_broadcast(new_pre_shape)
-        b_broad = b.unsqueeze_to_broadcast(new_pre_shape)
-
-        return a_broad, b_broad
+        return self.__class__(new_raw_tensor)  # type: ignore
 
     @staticmethod
     def _default_device():
