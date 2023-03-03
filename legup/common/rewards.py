@@ -8,6 +8,11 @@ from typing import Iterable, Callable, Tuple, Dict
 import torch
 
 
+####### For your consideration: global
+# Rewards: Dict[str, Callable[[AbstractDynamics, Robot, Dict], None]
+# Thanks
+
+
 class Rewards:
     def __init__(self,
                  dynamics: AbstractDynamics,
@@ -32,7 +37,7 @@ class Rewards:
 
     def update_rewards(self,
                        command: torch.Tensor,
-                       rewards: Iterable[Callable[[], None]] = {},
+                       rewards: Iterable[Callable[["Rewards"], None]] = {},
                        curriculum_factor: float = 1.0
                        ) -> Dict[str, torch.Tensor]:
         """This function updates the rewards for the current timestep.
@@ -52,7 +57,7 @@ class Rewards:
         self.curriculum_factor = curriculum_factor
 
         for reward in rewards:
-            reward()
+            reward(self)
 
         return self.reward_info
 

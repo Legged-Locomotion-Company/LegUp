@@ -1,6 +1,9 @@
-import torch
-import numpy as np
 from isaacgym import gymapi, terrain_utils
+import torch
+
+from typing import Optional
+
+import numpy as np
 
 from legup.common.legup_config import IsaacConfig
 from legup.common.abstract_agent import AbstractAgent
@@ -10,11 +13,11 @@ class IsaacGymFactory:
 
     @staticmethod
     def create_sim(gym, config: IsaacConfig):
-        sim_params = gymapi.SimParams()  # type: ignore
+        sim_params = gymapi.SimParams() # type: ignore
         sim_params.dt = 1. / config.sim_config.dt
         sim_params.substeps = config.sim_config.substeps
-        sim_params.up_axis = gymapi.UP_AXIS_Z  # type: ignore
-        sim_params.gravity = gymapi.Vec3(0.0, 0.0, -9.81)  # type: ignore
+        sim_params.up_axis = gymapi.UP_AXIS_Z # type: ignore
+        sim_params.gravity = gymapi.Vec3(0.0, 0.0, -9.81) # type: ignore
         sim_params.use_gpu_pipeline = config.sim_config.use_gpu
 
         sim_params.physx.use_gpu = config.sim_config.use_gpu
@@ -35,10 +38,10 @@ class IsaacGymFactory:
         # sim_params.physx.contact_collection
         # sim_params.physx.bounce_threshold_velocity
         # sim_params.physx.always_use_articulations
-        return gym.create_sim(0, 0, gymapi.SIM_PHYSX, sim_params)
+        return gym.create_sim(0, 0, gymapi.SIM_PHYSX, sim_params) # type: ignore
 
     @staticmethod
-    def create_terrain(sim, gym, agent: AbstractAgent, config: IsaacConfig):
+    def create_terrain(sim, gym, agent: AbstractAgent, config: IsaacConfig) -> Optional[torch.Tensor]:
         '''
             - each environment has a width of config.env_spacing and height of config.env_spacing
             - should probably add some border to each environment too
@@ -46,46 +49,60 @@ class IsaacGymFactory:
             - this heightmap is populated using the terrain_utils functions
             - and then converted to a triangle mesh with terrain_utils
         '''
-        num_envs = config.num_envs_per_terrain_type * \
-            config.num_terrain  # total number of environments/patches in simulation
-        # since we have a square quilt, this is the side length
-        num_columns = int(np.sqrt(num_envs))
-        # since we have a square quilt, this is the side width
-        num_rows = int(np.ceil(num_envs / num_columns))
+        num_envs = config.num_envs_per_terrain_type * config.num_terrain  # total number of environments/patches in simulation # nopep8
+        num_columns = int(np.sqrt(num_envs))  # since we have a square quilt, this is the side length # nopep8
+        num_rows = int(np.ceil(num_envs / num_columns))  # since we have a square quilt, this is the side width # nopep8
 
-        patch_width = 2 * config.env_spacing / config.horizontal_terrain_scale
-        border_size = 2 * config.terrain_border / config.horizontal_terrain_scale
+        patch_width = int(2 * config.env_spacing / config.horizontal_terrain_scale)
+        border_size = int(2 * config.terrain_border / config.horizontal_terrain_scale)
         terrain_len_columns = num_columns * patch_width + border_size
         terrain_len_rows = num_rows * patch_width + border_size
 
-        heightfield = np.zeros(
-            (terrain_len_columns, terrain_len_rows), dtype=np.int16)  # type: ignore
+        heightfield = np.zeros((terrain_len_columns, terrain_len_rows), dtype=np.int16)
+        # TODO configure this somehow? is this number of tiles or number of envs
+        agent_terrains = agent.generate_new_terrain(config.num_terrain, config.num_envs_per_terrain_type)
 
-        # idxs = np.unravel_index(np.arange(num_envs), (num_columns, num_rows))
-        # for cx, cy in zip(*idxs):
-        #     heightfield[cx, cy]
+        if agent_terrains is None or len(agent_terrains) == 0:
+            return None
+        
+        if len(agent_terrains) != config.num_terrain:
+            raise ValueError(f"Agent {agent.__class__} returned {len(agent_terrains)} terrains, but {config.num_terrain} were expected")
 
-        # vertices, triangles = convert_heightfield_to_trimesh(heightfield, horizontal_scale=horizontal_scale, vertical_scale=vertical_scale, slope_threshold=1.5)
-        # tm_params = gymapi.TriangleMeshParams()
-        # tm_params.nb_vertices = vertices.shape[0]
-        # tm_params.nb_triangles = triangles.shape[0]
-        # tm_params.transform.p.x = -1.
-        # tm_params.transform.p.y = -1.
-        # gym.add_triangle_mesh(sim, vertices.flatten(), triangles.flatten(), tm_params)
+        for col_idx in range(num_columns):
+            for row_idx in range(num_rows):
+                col_ptr, row_ptr = col_idx * patch_width, row_idx * patch_width
+                terrain_slice = heightfield[col_ptr:col_ptr+patch_width, row_ptr:row_ptr+patch_width]
+                
+                patch_terrain = agent_terrains[col_idx * num_rows + row_idx]
+                terrain_slice[...] = patch_terrain.create_heightfield(patch_width, config.horizontal_terrain_scale, config.vertical_terrain_scale)
 
-        return heightfield
+        vertices, triangles = \
+            terrain_utils.convert_heightfield_to_trimesh(heightfield,
+                                                         horizontal_scale=config.horizontal_terrain_scale,
+                                                         vertical_scale=config.vertical_terrain_scale,
+                                                         slope_threshold=1.5)
+
+        tm_params = gymapi.TriangleMeshParams() # type: ignore
+        tm_params.nb_vertices = vertices.shape[0]
+        tm_params.nb_triangles = triangles.shape[0]
+        tm_params.transform.p.x = -1.
+        tm_params.transform.p.y = -1.
+        gym.add_triangle_mesh(sim, vertices.flatten(),
+                              triangles.flatten(), tm_params)
+
+        return torch.from_numpy(heightfield).float().to(agent.device)
 
     @staticmethod
     def create_actors(sim, gym, agent: AbstractAgent, config: IsaacConfig):
         # create asset and initialize relevant properties
-        asset_options = gymapi.AssetOptions()  # TODO: more asset options
+        asset_options = gymapi.AssetOptions() # type: ignore # TODO: more asset options
         asset_options.fix_base_link = True
         asset_options.armature = 0.01
         asset_handle = gym.load_asset(
             sim, config.asset_config.asset_path, config.asset_config.filename)
 
         asset_props = gym.get_asset_dof_properties(asset_handle)
-        asset_props["driveMode"].fill(gymapi.DOF_MODE_POS)
+        asset_props["driveMode"].fill(gymapi.DOF_MODE_POS) # type: ignore
         asset_props["stiffness"].fill(config.asset_config.stiffness)
         asset_props["damping"].fill(config.asset_config.damping)
 
@@ -94,8 +111,8 @@ class IsaacGymFactory:
         num_envs = config.num_envs_per_terrain_type * config.num_terrain
         num_per_row = int(np.sqrt(num_envs))
 
-        lower_space = gymapi.Vec3(-spacing, -spacing, 0.0)
-        upper_space = gymapi.Vec3(spacing, spacing, spacing)
+        lower_space = gymapi.Vec3(-spacing, -spacing, 0.0) # type: ignore
+        upper_space = gymapi.Vec3(spacing, spacing, spacing) # type: ignore
 
         actor_positions = agent.sample_new_position(
             num_envs * config.num_agents_per_env, tuple(lower_space), tuple(upper_space))
@@ -110,9 +127,9 @@ class IsaacGymFactory:
                 sim, lower_space, upper_space, num_per_row)
             for actor_idx in range(config.num_agents_per_env):
                 idx = env_idx * num_envs + actor_idx
-                pose = gymapi.Transform()
-                pose.p = gymapi.Vec3(*actor_positions[idx])
-                pose.r = gymapi.Quat(*actor_rotations[idx])
+                pose = gymapi.Transform() # type: ignore
+                pose.p = gymapi.Vec3(*actor_positions[idx]) # type: ignore
+                pose.r = gymapi.Quat(*actor_rotations[idx]) # type: ignore
 
                 actor_handle = gym.create_actor(
                     env_handle, asset_handle, pose, f"env-{env_idx}_actor-{actor_idx}", env_idx, 1)
@@ -129,7 +146,7 @@ class IsaacGymFactory:
 
     @staticmethod
     def create_camera(sim, gym, config: IsaacConfig):
-        camera_props = gymapi.CameraProperties()
+        camera_props = gymapi.CameraProperties() # type: ignore
         camera_props.width = config.camera_config.capture_width
         camera_props.height = config.camera_config.capture_height
         camera_props.use_collision_geometry = config.camera_config.draw_collision_mesh
@@ -142,14 +159,15 @@ class IsaacGymFactory:
 
         camera_handle = gym.create_camera_sensor(render_env, camera_props)
 
-        camera_offset = gymapi.Vec3(-0.5, -0.5, 1)
-        camera_rotation = gymapi.Quat().from_euler_zyx(
+        camera_offset = gymapi.Vec3(-0.5, -0.5, 1) # type: ignore
+        camera_rotation = gymapi.Quat().from_euler_zyx( # type: ignore
             np.radians(0), np.radians(45), np.radians(45))
-        camera_transform = gymapi.Transform(camera_offset, camera_rotation)
+        camera_transform = gymapi.Transform(camera_offset, camera_rotation) # type: ignore
 
         gym.attach_camera_to_body(
-            camera_handle, render_env, render_body_target, camera_transform, gymapi.FOLLOW_POSITION)
-        gym.set_light_parameters(sim, 0, gymapi.Vec3(
-            0.8, 0.8, 0.8), gymapi.Vec3(0.8, 0.8, 0.8), gymapi.Vec3(0, 0, 0))
+            camera_handle, render_env, render_body_target, camera_transform, gymapi.FOLLOW_POSITION) # type: ignore
+        gym.set_light_parameters(sim, 0,
+                                 gymapi.Vec3(0.8, 0.8, 0.8), # type: ignore
+                                 gymapi.Vec3(0.8, 0.8, 0.8), gymapi.Vec3(0, 0, 0)) # type: ignore
 
         return camera_handle

@@ -49,7 +49,7 @@ class AbstractAgent(ABC):
 
         pass
 
-    @ abstractmethod
+    @abstractmethod
     def reset_agents(self, terminated_agents: torch.Tensor) -> None:
         """Called right after reseting any terminated agents, use this to reset any local buffers and resample new commands
 
@@ -58,12 +58,12 @@ class AbstractAgent(ABC):
         """
         pass
 
-    @ abstractmethod
+    @abstractmethod
     def post_physics_step(self) -> None:
         """Called right after stepping in the environment, use this to update any local buffers"""
         pass
 
-    @ abstractmethod
+    @abstractmethod
     def make_observation(self, dynamics: AbstractDynamics) -> torch.Tensor:
         """Called to create a new observation from the environment
 
@@ -75,7 +75,7 @@ class AbstractAgent(ABC):
         """
         pass
 
-    @ abstractmethod
+    @abstractmethod
     def make_reward(self, dynamics: AbstractDynamics) -> Tuple[torch.Tensor, dict]:
         """Called to calculate rewards in the new environment
 
@@ -87,7 +87,7 @@ class AbstractAgent(ABC):
         """
         pass
 
-    @ abstractmethod
+    @abstractmethod
     def find_terminated(self, dynamics: AbstractDynamics) -> torch.Tensor:
         """Called when the environment needs to check which agents have terminated
 
@@ -101,7 +101,7 @@ class AbstractAgent(ABC):
         """
         pass
 
-    @ abstractmethod
+    @abstractmethod
     def sample_new_position(self, num_positions: int, pos_lower: Tuple[int, int, int], pos_upper: Tuple[int, int, int]) -> torch.Tensor:
         """Called when the environment needs to sample new positions for robot root
 
@@ -115,7 +115,7 @@ class AbstractAgent(ABC):
         """
         pass
 
-    @ abstractmethod
+    @abstractmethod
     def sample_new_quaternion(self, num_quats: int) -> torch.Tensor:
         """Called when the environment needs to sample new quaternions for robot root
 
@@ -127,7 +127,7 @@ class AbstractAgent(ABC):
         """
         pass
 
-    @ abstractmethod
+    @abstractmethod
     def sample_new_joint_pos(self, num_pos: int) -> torch.Tensor:
         """Called when the environment needs to sample new robot joint positions
 
@@ -137,14 +137,16 @@ class AbstractAgent(ABC):
         Returns:
             torch.Tensor: new joint positions of shape `(num_pos, num_dof)`
         """
+        pass
 
-    def generate_new_terrain(self, num_terrains: int) -> Optional[List[AbstractTerrain]]:
+    def generate_new_terrain(self, terrain_types: int, terrains_per_type: int) -> Optional[List[AbstractTerrain]]:
         """Called after every rollout to check if the environment should change its terrain
 
         Args:
-            num_terrains (int): Number of terrains to create
+            terrain_types (int): Number of terrain types
+            terrains_per_type (int): Number of terrains per type
 
         Returns:
             Optional[List[Any]]: None if no change, new terrain configurations otherwise
         """
-        return None
+        pass

@@ -7,7 +7,7 @@ from omegaconf import DictConfig
 from legup.common.abstract_agent import AbstractAgent
 from legup.common.abstract_dynamics import AbstractDynamics
 from legup.common.robot import Robot
-from legup.common.rewards import Reward
+from legup.common.rewards import Rewards
 
 
 
@@ -20,10 +20,12 @@ class WildAnymalAgent(AbstractAgent):
         # TODO: add reward function shit here
         self.robot = robot
 
-        self.reward_fn = Reward(
+        self.reward_fn = Rewards(
             dynamics=self.dynamics,
             robot=self.robot,
             scale=self.config.scale)
+        
+        self.command = torch.Tensor([1,0,0], device=self.device).repeat(self.num_agents, 1)
 
 
     def make_actions(self, actions: torch.Tensor) -> torch.Tensor:
@@ -54,7 +56,7 @@ class WildAnymalAgent(AbstractAgent):
         phase_offsets = torch.tensor(
             [0, torch.pi, torch.pi, 0]).to(self.device)
 
-        phase = (self.ep_lens * self.dt).expand(4, self.num_agents).T * \
+        phase = (self.ep_lens * self.dynamics.get_dt()).expand(4, self.num_agents).T * \
             base_frequencies * torch.pi * 2
         phase += phase_offsets.expand(phase.shape)
 
@@ -83,17 +85,14 @@ class WildAnymalAgent(AbstractAgent):
         self.ep_lens[terminated_agents] = 0
 
     def post_physics_step(self) -> None:
-        self.ep_lens += 1
-    
-    def make_command(self):
-        return torch.Tensor([1,0,0], device=self.device).repeat(self.num_agents, 1)
+        self.ep_lens += 1        
 
     def make_observation(self, dynamics: AbstractDynamics) -> torch.Tensor:
         proprio = torch.zeros(self.num_agents, 133).to(self.device)
         extro = torch.zeros(self.num_agents, 208).to(self.device)
         privil = torch.zeros(self.num_agents, 50).to(self.device)
 
-        proprio[: , :3] = self.make_command()
+        proprio[: , :3] = self.command
 
         proprio[:, 3:6] = dynamics.get_position()
         proprio[:, 6:9] = dynamics.get_linear_velocity()
@@ -135,7 +134,15 @@ class WildAnymalAgent(AbstractAgent):
 
 
     def make_reward(self, dynamics: AbstractDynamics) -> Tuple[torch.Tensor, dict]:
-        rewards, rewards_dict = self.reward_fn(dynamics)
+        rewards_dict = \
+            self.reward_fn.update_rewards(self.command,
+                                          [
+                                            Rewards.ang_velocity,
+                                            Rewards.lin_velocity,
+                                            Rewards.foot_clearance,
+                                          ])
+        
+        rewards = torch.stack(list(rewards_dict.values()), dim=0).sum(dim=-1)
         return rewards, rewards_dict
 
     def find_terminated(self, dynamics: AbstractDynamics) -> torch.Tensor:
