@@ -27,8 +27,8 @@ class RobotJointAngles(TensorWrapper):
 
         end_shape = list(joint_angles_tensor.shape[-1:])
 
-        super().__init__(joint_angles_tensor,
-                         end_shape=end_shape)
+        self.initialize_base(joint_angles_tensor,
+                             end_shape=end_shape)
 
     def for_robot(self, robot: "Robot"):
         return robot.name == self.robot_name
@@ -236,22 +236,47 @@ class RobotJoint:
             device (torch.device, optional): The device of the joint. Defaults to None.
         """
 
-        screw_devices = set([screw.device for screw in screws])
+        if device is None:
+            devices = set([screw.device for screw in screws])
+            devices.add(origin.device)
+            devices.add(child_link.device)
 
-        if device is None and len(screw_devices) == 1:
-            device = screw_devices.pop()
-        elif device is None:
-            raise ValueError(
-                "Either all screws must be on the same device or a device must be specified.")
+            if len(devices) == 1:
+                device = devices.pop()
+            else:
+                raise ValueError(
+                    "Either all screws, origin, and child link must be on the same device or a device must be specified.")
 
-        self.name = name
-        self.screws = list(screws)
+        else:
+            origin = origin.to(device)
+            screws = [screw.to(device) for screw in screws]
+            child_link = child_link.to(device)
+
+        # stack screws
+        self.screws = Screw.stack(screws)
+
         self.origin = origin
         self.child_link = child_link
         self.device = device
-        self.num_dofs = len(self.screws)
+        self.num_dofs = len(list(screws))
 
-    @staticmethod
+    def apply(self, angles: torch.Tensor) -> Transform:
+        """Applies the joint to the given joint angles.
+
+        Args:
+            joint_angles (torch.Tensor): An (...) shaped tensor of joint angles
+
+        Returns:
+            Transform: A (...) shaped transform.
+        """
+
+        if not self.num_dofs == 1 and angles.shape[-1] != self.num_dofs:
+            raise ValueError(
+                f"Expected {self.num_dofs} joint angles but got {angles.shape[-1]}.")
+
+        return self.origin * self.screws.apply(angles)
+
+    @ staticmethod
     def make_revolute(name: str,
                       origin: Transform,
                       axis: Direction,
@@ -274,6 +299,22 @@ class RobotJoint:
         screw = Screw.from_axis_and_origin(axis, origin_pos)
 
         return RobotJoint(name, origin, [screw], child_link, device)
+
+    @ staticmethod
+    def make_fixed(name: str, origin: Transform, child_link: RobotLink, device: Optional[torch.device] = None) -> "RobotJoint":
+        """Creates a fixed joint.
+
+        Args:
+            name (str): The name of the joint.
+            origin (Transform): The origin of the in its parent link.
+            child_link (RobotLink): The child link of the joint.
+            device (torch.device, optional): The device of the joint. Defaults to None.
+
+        Returns:
+            RobotJoint: The fixed joint.
+        """
+
+        return RobotJoint(name, origin, [], child_link, device)
 
     def to(self: RobotJointSubclass, device: torch.device) -> RobotJointSubclass:
         """Moves this joint to the given device. This modifies the joint so other references to it will be modified as well.

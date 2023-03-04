@@ -13,6 +13,9 @@ Raw tensor functions
 def _raw_screw_from_axis_origin(axis: torch.Tensor, origin: torch.Tensor):
     """Constructs a raw screw tensor from an axis and origin."""
 
+    axis = axis.to(dtype=torch.float)
+    origin = origin.to(dtype=torch.float)
+
     pre_shape = axis.shape[:-1]
     screw = torch.empty(pre_shape + (6,), device=axis.device)
 
@@ -25,6 +28,8 @@ def _raw_screw_from_axis_origin(axis: torch.Tensor, origin: torch.Tensor):
 @torch.jit.script  # type: ignore
 def _raw_twist_skew(twist_tensor: torch.Tensor):
     """Converts the raw twist tensor to a skew matrix tensor"""
+
+    twist_tensor = twist_tensor.to(dtype=torch.float)
 
     # Construct the skew matrix.
     skew = torch.zeros(
@@ -44,6 +49,8 @@ def _raw_twist_skew(twist_tensor: torch.Tensor):
 @torch.jit.script  # type: ignore
 def _raw_screw_skew(screw_tensor: torch.Tensor):
     """Converts the raw screw tensor to a skew matrix tensor"""
+
+    screw_tensor = screw_tensor.to(dtype=torch.float)
 
     screw_rotation = screw_tensor[..., :3]
     screw_translation = screw_tensor[..., 3:]
@@ -65,6 +72,8 @@ def _raw_screw_skew(screw_tensor: torch.Tensor):
 def _raw_twist_unskew(twist_skew_tensor: torch.Tensor) -> torch.Tensor:
     """Computes the unskew vector of a twist skew matrix."""
 
+    twist_skew_tensor = twist_skew_tensor.to(dtype=torch.float)
+
     # Construct the unskew vector.
     twist_unskew_tensor = torch.zeros(
         list(twist_skew_tensor.shape[:-2]) + [3], device=twist_skew_tensor.device)
@@ -79,6 +88,8 @@ def _raw_twist_unskew(twist_skew_tensor: torch.Tensor) -> torch.Tensor:
 @torch.jit.script  # type: ignore
 def _raw_rotation_log_map(rotation_tensor: torch.Tensor):
     """Computes the log map of a rotation."""
+
+    rotation_tensor = rotation_tensor.to(dtype=torch.float)
 
     # Compute the trace of the rotation matrix.
     trace = torch.trace(rotation_tensor)
@@ -107,6 +118,8 @@ def _raw_normalize_tensor(in_tensor: torch.Tensor, dim: int):
         dim: The dimension to normalize along.
     """
 
+    in_tensor = in_tensor.to(dtype=torch.float)
+
     norms = torch.norm(in_tensor, dim=dim, keepdim=True)
 
     return in_tensor / norms
@@ -116,6 +129,8 @@ def _raw_normalize_tensor(in_tensor: torch.Tensor, dim: int):
 def _raw_twist_skew_exp_map(twist_skew_tensor: torch.Tensor) -> torch.Tensor:
     """Computes the exponential map of a twist skew matrix.
         This is an implementation of equation 3.51 from Modern Robotics by Kevin Lynch."""
+
+    twist_skew_tensor = twist_skew_tensor.to(dtype=torch.float)
 
     # Get omega * theta from [omega] * theta
     omega_theta = _raw_twist_unskew(twist_skew_tensor)
@@ -148,12 +163,15 @@ def _raw_screw_skew_exp_map(screw_skew_tensor: torch.Tensor):
     """Converts the raw screw skew tensor to a log tensor
     Implementation of equation 3.88 from Modern Robotics by Kevin Lynch"""
 
+    screw_skew_tensor = screw_skew_tensor.to(dtype=torch.float)
+
     # create the result tensor
     pre_shape = screw_skew_tensor.shape[:-2]
     out_shape = list(pre_shape) + [4, 4]
 
     # Create a tensor to hold the result
-    result = torch.zeros(out_shape, device=screw_skew_tensor.device)
+    result = torch.zeros(
+        out_shape, device=screw_skew_tensor.device, dtype=torch.float)
 
     result[..., 3, 3] = 1
 
@@ -233,9 +251,10 @@ Spatial classes
 
 class Position(TensorWrapper):
     def __init__(self, position_tensor: torch.Tensor):
-        if position_tensor.shape[-1] != (3,):
-            raise ValueError("Position vector must be of shape (3,).")
-        super().__init__(position_tensor, end_shape=[3])
+        if position_tensor.shape[-1] != 3:
+            raise ValueError(
+                f"Last dim of position_tensor must be 3 not {position_tensor.shape[-1]}.")
+        self.initialize_base(position_tensor, end_shape=[3])
 
     def compose(self, other: "Position") -> "Position":
         """Composes two positions."""
@@ -247,7 +266,7 @@ class Rotation(TensorWrapper):
     def __init__(self, rotation_tensor: torch.Tensor):
         if rotation_tensor.shape[-2:] != (3, 3):
             raise ValueError("Rotation matrix must be of shape (3, 3).")
-        super().__init__(rotation_tensor, end_shape=[3, 3])
+        self.initialize_base(rotation_tensor, end_shape=[3, 3])
 
     @staticmethod
     def empty_rotation(*shape, device=None):
@@ -272,7 +291,7 @@ class Twist(TensorWrapper):
     def __init__(self, twist_tensor: torch.Tensor):
         if twist_tensor.shape[-1] != 3:
             raise ValueError("Twist vector must be of shape (3,).")
-        super().__init__(twist_tensor, end_shape=[3])
+        self.initialize_base(twist_tensor, end_shape=[3])
 
     def skew(self) -> "TwistSkew":
         """Computes the skew matrix of a twist."""
@@ -305,7 +324,7 @@ class TwistSkew(TensorWrapper):
     def __init__(self, twist_skew_tensor: torch.Tensor):
         if twist_skew_tensor.shape[-2:] != (3, 3):
             raise ValueError("Twist skew matrix must be of shape (3, 3).")
-        super().__init__(twist_skew_tensor, end_shape=[3, 3])
+        self.initialize_base(twist_skew_tensor, end_shape=[3, 3])
 
     def unskew(self) -> Twist:
         """Computes the unskew vector of a twist skew matrix."""
@@ -340,7 +359,7 @@ class Transform(TensorWrapper):
     def __init__(self, transform_tensor: torch.Tensor):
         if transform_tensor.shape[-2:] != (4, 4):
             raise ValueError("Transform matrix must be of shape (4, 4).")
-        super().__init__(transform_tensor, end_shape=[4, 4])
+        self.initialize_base(transform_tensor, end_shape=[4, 4])
 
     def compose(self, other: "Transform", out: Optional["Transform"]) -> "Transform":
         """Composes two transforms."""
@@ -365,20 +384,24 @@ class Transform(TensorWrapper):
     def get_position(self) -> Position:
         return Position(self.tensor[..., :3, 3])
 
+    def __mul__(self, other: "Transform") -> "Transform":
+        return self.compose(other, out=None)
+
 
 class Direction(TensorWrapper):
     def __init__(self, direction_vec_tensor: torch.Tensor):
-        if direction_vec_tensor.shape[-1] != (3,):
-            raise ValueError("Direction vector must be of shape (3,).")
+        if direction_vec_tensor.shape[-1] != 3:
+            raise ValueError(
+                f"Last dim of direction_vec_tensor must be 3 not {direction_vec_tensor.shape[-1]}.")
 
-        super().__init__(direction_vec_tensor, end_shape=[3])
+        self.initialize_base(direction_vec_tensor, end_shape=[3])
 
 
 class Screw(TensorWrapper):
     def __init__(self, screw_vec_tensor: torch.Tensor):
         if screw_vec_tensor.shape[-1] != 6:
             raise ValueError("Screw vector must be of shape (6,).")
-        super().__init__(screw_vec_tensor, end_shape=[6])
+        self.initialize_base(screw_vec_tensor, end_shape=[6])
 
     @staticmethod
     def empty_screw(shape: Sequence[int], device: Optional[torch.device] = None) -> "Screw":
@@ -418,9 +441,9 @@ class Screw(TensorWrapper):
 
         origin = origin.to(device)
 
-        if axis.pre_shape != origin.pre_shape:
+        if axis.pre_shape() != origin.pre_shape():
             raise ValueError(
-                f"Axis and origin must have the same pre-shape. Got {axis.pre_shape} and {origin.pre_shape} respectively.")
+                f"Axis and origin must have the same pre-shape. Got {axis.pre_shape()} and {origin.pre_shape()} respectively.")
 
         screw_tensor = _raw_screw_from_axis_origin(
             axis.tensor.to(device), origin.tensor.to(device))
@@ -457,12 +480,43 @@ class Screw(TensorWrapper):
 
         return ScrewSkew(skew_matrix_tensor)
 
+    def __mul__(self, factor: torch.Tensor) -> "Screw":
+        """Multiplies a screw by a tensor."""
+
+        broadcast_shape = torch.broadcast_shapes(
+            self.pre_shape(), factor.shape)
+
+        self_broadcast = self.unsqueeze_to_broadcast(broadcast_shape)
+        factor_broadcast = factor.broadcast_to(broadcast_shape)
+
+        # Unsqueeze the factor to allow it to be broadcasted with the screw.
+        unsquoze_factor = factor.unsqueeze(-1)
+
+        # Multiply unsquoze other by the screw.
+        multiplied_screw_tensor = self.tensor * unsquoze_factor
+
+        return Screw(multiplied_screw_tensor)
+
+    def apply(self, theta: torch.Tensor) -> "Transform":
+        """Applies a rotation to a screw.
+
+        Args:
+            theta (torch.Tensor): The rotation angle.
+
+        Returns:
+            Screw: The rotated screw.
+        """
+
+        multiplied_screw = self * theta
+
+        return multiplied_screw.exp_map()
+
 
 class ScrewSkew(TensorWrapper):
     def __init__(self, screw_skew_tensor: torch.Tensor):
         if screw_skew_tensor.shape[-2:] != (4, 4):
             raise ValueError("Screw skew matrix must be of shape (4, 4).")
-        super().__init__(screw_skew_tensor, end_shape=[4, 4])
+        self.initialize_base(screw_skew_tensor, end_shape=[4, 4])
 
     def exp_map(self) -> Transform:
         """Computes the log map of a screw skew matrix which is a transform."""
