@@ -1,7 +1,9 @@
-from legup.common.tensor_wrapper import TensorWrapper
-from legup.common.spatial import Transform, Screw, Position, Direction
+from legup.common.tensor_types import TensorWrapper, TensorIndexer, WrappedScalar
+from legup.common.spatial import Transform, Screw, Position, Direction, ScrewSkew, _raw_twist_skew_exp_map
+from legup.common.link import Link, Joint
 
-from typing import List, Optional, Union, Dict, Iterable, TypeVar
+from typing import List, Optional, Union, Dict, Iterable, TypeVar, Callable
+from copy import copy
 from abc import ABC, abstractmethod
 
 import xml.etree.ElementTree as ET
@@ -9,50 +11,37 @@ import xml.etree.ElementTree as ET
 import torch
 
 
-class RobotJointAngles(TensorWrapper):
-    def __init__(self, robot: "Robot", joint_angles_tensor: torch.Tensor):
-        """Factory that creates joint angles class for a robot.
+class DOFAngle(TensorWrapper):
+    def __init__(self, joint_angles: torch.Tensor):
 
-        Args:
-            robot: The robot.
+        self.num_dofs = joint_angles.shape[-1]
 
-        Returns:
-            A joint angles class.
-        """
+        super().initialize_base(joint_angles, [self.num_dofs])
 
-        self.robot_name = robot.name
-        if joint_angles_tensor.shape[-1] != robot.get_num_dofs():
-            raise ValueError(
-                f"Joint angles must be of shape (..., {robot.num_dofs}).")
 
-        end_shape = list(joint_angles_tensor.shape[-1:])
+class KinematicsObject:
+    def __init__(self, ):
 
-        self.initialize_base(joint_angles_tensor,
-                             end_shape=end_shape)
+    def make_function(self):
+        def kinematics(joint_angles: torch.Tensor):
 
-    def for_robot(self, robot: "Robot"):
-        return robot.name == self.robot_name
-
-    def assert_for_robot(self, robot: "Robot"):
-        """This function throws an error when the joint angles are not for the given robot."""
-        if not self.for_robot(robot):
-            raise ValueError(
-                f"Joint angles for {self.robot_name} used for {robot.name}.")
+            if joint_angles.shape[-1] != self.num_dofs:
+                raise ValueError(
+                    f"Joint angles must have {self.num_dofs} DOFs, but got {joint_angles.shape[-1]}.")
 
 
 class Robot:
     """Abstract class for a robot. A robot is a collection of legs that does forward kinematics."""
 
-    def __init__(self, legs: List["RobotLeg"],
+    def __init__(self, base_link: Link,
                  name: str,
-                 home_position: Optional[Union[RobotJointAngles,
-                                               torch.Tensor]] = None,
+                 home_position: Optional[Dict[str, List[float]]],
                  device: Optional[torch.device] = None,
-                 knee_joint_indices: Optional[torch.Tensor] = None,
-                 foot_link_indices: Optional[torch.Tensor] = None,
-                 shank_link_indices: Optional[torch.Tensor] = None,
-                 thigh_link_indices: Optional[torch.Tensor] = None,
-                 knee_joint_limits: Optional[torch.Tensor] = None):
+                 knee_joint_names: Optional[List[str]] = None,
+                 foot_link_names: Optional[List[str]] = None,
+                 shank_link_names: Optional[List[torch.Tensor]] = None,
+                 thigh_link_names: Optional[List[torch.Tensor]] = None,
+                 knee_joint_limits: Optional[List[torch.Tensor]] = None):
         """Initializes a robot.
 
         Args:
@@ -66,31 +55,148 @@ class Robot:
             thigh_link_indices (Optional[torch.Tensor], optional): The indices of the thigh links. Defaults to None.
         """
 
+        # Assign the straightforward values
+        # We assume that the robot referenced will not change
+
         if device is None:
-            device = TensorWrapper._default_device()
+            device = base_link.device
 
-        self.legs = [leg.to(device) for leg in legs]
+        self.base_link = base_link
+
         self.name = name
-        self.num_dofs = sum([leg.num_dofs for leg in legs])
-        if home_position is None:
-            home_position = RobotJointAngles(
-                self, torch.zeros(self.num_dofs, device=device))
-        else:
-            home_position = home_position.to(device)
-        self.home_position = home_position
 
-        self.knee_joint_indices = knee_joint_indices
-        self.foot_link_indices = foot_link_indices
-        self.shank_link_indices = shank_link_indices
-        self.thigh_link_indices = thigh_link_indices
+        self.knee_joint_names = knee_joint_names
+        self.foot_link_names = foot_link_names
+        self.shank_link_names = shank_link_names
+        self.thigh_link_names = thigh_link_names
         self.knee_joint_limits = knee_joint_limits
+        self.foot_link_names = foot_link_names
 
-    def get_knee_joint_indices(self) -> torch.Tensor:
-        """This function either returns the knee joint indices or throws an error if they are not set.
+        self.device = device
+
+        dof_screws_dict = self.base_link.get_dofs()
+
+        links_dict = self.base_link.get_links()
+
+        self.dof_screws = TensorIndexer.from_dict(dof_screws_dict)
+
+        self.dof_screw_skews = TensorIndexer.from_dict(
+            {dof_name: dof_screw.skew()
+             for dof_name, dof_screw in dof_screws_dict.items()})
+
+        robot_joints = self.base_link.get_joints()
+
+        if home_position is not None:
+            home_dof_theta_dict: Dict[str, float] = {}
+
+            for joint_name, joint_thetas in home_position.items():
+
+                if len(joint_thetas) != robot_joints[joint_name].num_dofs:
+                    raise ValueError(
+                        f"Home position for joint {joint_name} has {len(joint_thetas)} values, but joint has {robot_joints[joint_name].num_dofs} DOFs.")
+
+                home_dof_theta_dict.update(
+                    zip(robot_joints[joint_name].get_dof_names(), joint_thetas))
+
+            self.home_position = torch.tensor([home_dof_theta_dict[dof_name]
+                                               for dof_name in self.dof_screws.get_idx_names()])
+
+        else:
+            self.home_position = torch.zeros(
+                self.dof_screws.num_idxs(), device=self.device)
+
+        self.zero_transforms = self.base_link.forward_kinematics()
+
+        self.link_body_screw_skews: Dict[str, TensorIndexer[ScrewSkew]] = {}
+
+        for link_name in self.base_link.get_links().keys():
+
+            # Get dofs that move this link
+            relevant_dofs: List[str] = []
+
+            link_joint_chain = base_link.find_link_joint_chain(link_name)
+            for joint in link_joint_chain:
+                relevant_dofs.extend(joint.get_dof_names())
+
+            # In Modern Robotics this value is called M
+            zero_transform = self.zero_transforms[link_name]
+
+            # In Modern Robotics this value is called [Ad_M^{-1}]
+            zero_transform_inv_adj = zero_transform.invert().adjoint()
+
+            body_screws_dict = {dof_name: zero_transform_inv_adj * self.dof_screws[dof_name]
+                                for dof_name in relevant_dofs}
+
+            body_screw_skews_dict = {dof_name: dof_screw.skew()
+                                     for dof_name, dof_screw in body_screws_dict.items()}
+
+            self.link_body_screw_skews[link_name] = \
+                TensorIndexer.from_dict(body_screw_skews_dict)
+
+    def add_joint_and_link(self, joint: Joint, link: Link):
+        """Adds a joint and link to the robot.
+
+        Args:
+            joint (Joint): The joint to add.
+            link (Link): The link to add.
+        """
+
+        self.base_link.add_joint_and_link(joint, link)
+
+    def get_dof_idx(self, dof_name: str) -> int:
+        """Gets the index of a degree of freedom.
+
+        Args:
+            dof_name (str): The name of the degree of freedom.
 
         Returns:
-            torch.Tensor: a tensor containing the indices of the knee joints in the joint angles tensor.
+            int: The index of the degree of freedom.
         """
+
+        return self.dof_screws.get_idx(dof_name)
+
+    def forward_kinematics(self, query_links: Iterable[str], dof_thetas: TensorIndexer[WrappedScalar]) -> TensorIndexer[Transform]:
+
+        # First we create a tensor with the dof angles in the correct order
+        theta_tensor = \
+            dof_thetas.to_tensor(self.dof_screw_skews.get_idx_names())
+
+        # Now we create a TensorIndexer to relate dof name strings to their relative transforms
+        dof_transforms = \
+            self.dof_screw_skews.apply(ScrewSkew.apply, theta_tensor)
+
+        # Now we need the joint chains so we can create a transform list for each joint
+        query_link_joint_chains = {link_name: self.base_link.find_link_joint_chain(link_name)
+                                   for link_name in query_links}
+
+        # Now we use a set comprehension to pull out all the unique joint names
+        unique_joints = \
+            {joint
+             for joint_chain in query_link_joint_chains.values()
+             for joint in joint_chain}
+
+        # Now we create a list of transforms for each joint
+        joint_transform_lists = \
+            {joint.name: [joint.origin] + [dof_transforms[dof_name]
+                                           for dof_name in joint.get_dof_names()]
+             for joint in unique_joints}
+
+        # Now we create a list of transforms for each query link
+        query_link_transform_lists = \
+            {query_link_name: [transform
+                               for joint in joint_chain
+                               for transform in joint_transform_lists[joint.name]]
+                for query_link_name, joint_chain in query_link_joint_chains.items()}
+
+        # Now we compose the transforms for each query link
+        query_link_transforms = \
+            {query_link_name: Transform.compose(*transform_list)
+             for query_link_name, transform_list
+             in query_link_transform_lists.items()}
+
+        return TensorIndexer.from_dict(query_link_transforms)
+
+    def get_knee_joint_indices(self) -> torch.Tensor:
 
         if self.knee_joint_indices is None:
             raise ValueError(
@@ -159,207 +265,66 @@ class Robot:
 
         return self.num_dofs
 
-    def create_joint_angles(self, joint_angles_tensor: torch.Tensor) -> RobotJointAngles:
-        return RobotJointAngles(self, joint_angles_tensor)
+    @staticmethod
+    def make_kinematics(dofs: TensorIndexer[ScrewSkew], joint_chains: List[List[Joint]]) -> torch.ScriptFunction:
 
-    def assign_home_position(self, home_position: RobotJointAngles):
-        """Assigns a home position to the robot.
+        joint_dict = {joint.name: joint for joint_chain in joint_chains
+                      for joint in joint_chain}
 
-        Args:
-            home_position (RobotJointAngles): The home position.
-        """
+        joint_names = list(joint_dict.keys())
+        joint_origins = {joint_name: joint_dict[joint_name].origin
+                         for joint_name in joint_names}
+        joint_dof_name_lists = [joint_dict[joint_name].get_dof_names()
+                                for joint_name in joint_names]
+        joint_chain_joint_names = [[joint.name for joint in joint_chain]
+                                   for joint_chain in joint_chains]
 
-        home_position.assert_for_robot(self)
+        raw_dof_screw_skews = dofs.tensor_wrapper.tensor.clone()
 
-        self.home_position = home_position
+        dof_names = dofs.get_idx_names()
+        num_dofs = len(dof_names)
 
-    # @overload
-    def forward_kinematics(self, joint_angles: RobotJointAngles, out: Optional[Position] = None) -> Position:
-        """Computes the forward kinematics of the robot."""
-        joint_angles.assert_for_robot(self)
+        zero_transforms = torch.zeros(
+            [len(joint_names), 4, 4], dtype=torch.float32)
 
-        raise NotImplementedError(
-            "This method is not implemented for this class.")
+        def kinematics(dof_thetas: torch.Tensor) -> torch.Tensor:
 
-    # @overload
-    # def forward_kinematics(self, joint_angles_tensor: torch.Tensor, out: Optional[torch.Tensor] = None) -> torch.Tensor:
-    #     """Computes the forward kinematics of the robot."""
-    #     joint_angles = self.joint_angles_class(joint_angles_tensor)
-
-    #     for leg in self.legs:
-    #         leg.forward_kinematics(joint_angles, out=out)
-
-
-class RobotLeg:
-    def __init__(self, joints: List["RobotJoint"], name: str):
-        self.joints = joints
-        self.name = name
-        self.num_dofs = len(joints)
-
-    def to(self, device: torch.device):
-        return RobotLeg([joint.to(device) for joint in self.joints], self.name)
-
-
-class RobotLink:
-    def __init__(self, name: str, child_joints: Iterable["RobotJoint"] = [], device: torch.device = TensorWrapper._default_device()):
-        self.name = name
-        self.child_joints = child_joints
-        self.device = device
-        self.to(device)
-
-    def to(self, device: torch.device):
-        for child_joint in self.child_joints:
-            child_joint.to(device)
-
-        return self
-
-
-RobotJointSubclass = TypeVar("RobotJointSubclass", bound="RobotJoint")
-
-
-class RobotJoint:
-    """This is an abstract class that represents a robot joint.
-    This class can be overridden by subclasses to support various types of joints."""
-
-    def __init__(self, name: str,
-                 origin: Transform,
-                 screws: Iterable[Screw],
-                 child_link: RobotLink,
-                 device: Optional[torch.device] = None):
-        """Creates a robot joint.
-
-        Args:
-            name (str): The name of the joint.
-            origin (Transform): The origin of the in its parent link.
-            screws (Iterable[Screw]): The screws of the joint.
-            child_link (RobotLink): The child link of the joint.
-            device (torch.device, optional): The device of the joint. Defaults to None.
-        """
-
-        if device is None:
-            devices = set([screw.device for screw in screws])
-            devices.add(origin.device)
-            devices.add(child_link.device)
-
-            if len(devices) == 1:
-                device = devices.pop()
-            else:
+            if dof_thetas.shape[-1] != num_dofs:
                 raise ValueError(
-                    "Either all screws, origin, and child link must be on the same device or a device must be specified.")
+                    f"Expected {num_dofs} dofs but got {dof_thetas.shape[0]}.")
 
-        else:
-            origin = origin.to(device)
-            screws = [screw.to(device) for screw in screws]
-            child_link = child_link.to(device)
+            # First we broadcast the raw_dof_screw_skews and dof_thetas together
+            broadcast_shape = torch.broadcast_shapes(
+                raw_dof_screw_skews.shape[:-2], dof_thetas.shape)
+            broadcast_dof_screw_skews = raw_dof_screw_skews.broadcast_to(
+                [*broadcast_shape, 4, 4])
+            broadcast_dof_thetas = dof_thetas.broadcast_to(broadcast_shape)
 
-        # stack screws
-        self.screws = Screw.stack(screws)
+            # Now we scale the screw skews by the dof angles
+            scaled_dof_screw_skews = \
+                broadcast_dof_screw_skews * \
+                broadcast_dof_thetas[..., None, None]
 
-        self.origin = origin
-        self.child_link = child_link
-        self.device = device
-        self.num_dofs = len(list(screws))
+            # Now we take the exp map of the scaled screw skews
+            dof_relative_transforms_tensor = \
+                _raw_twist_skew_exp_map(scaled_dof_screw_skews)
 
-    def apply(self, angles: torch.Tensor) -> Transform:
-        """Applies the joint to the given joint angles.
+            # Now we turn the dof relative transforms into a list
+            dof_relative_transforms_list = \
+                [dof_relative_transforms_tensor[..., dof_idx, :, :]
+                 for dof_idx in range(len(dof_names))]
 
-        Args:
-            joint_angles (torch.Tensor): An (...) shaped tensor of joint angles
+            # Here we create a dict which holds the relative transforms for each joint
+            # To do this we combine the origin transform for the joint and its dof transforms
+            joint_transforms: List[torch.Tensor] = \
+                [torch.chain_matmul([joint_origin] + [dof_relative_transforms_list[dof_names.index(dof_name)]
+                                                      for dof_name in joint_dof_name_list])
+                 for joint_origin, joint_dof_name_list in zip(joint_origins, joint_dof_name_lists)]
 
-        Returns:
-            Transform: A (...) shaped transform.
-        """
+            # Now we combine the joint transforms for each joint chain
+            joint_chain_transforms = \
+                [torch.chain_matmul([joint_transforms[joint_names.index(joint_name)]
+                                     for joint_name in joint_chain_joint_names])
+                 for joint_chain_joint_names in joint_chain_joint_names]
 
-        if not self.num_dofs == 1 and angles.shape[-1] != self.num_dofs:
-            raise ValueError(
-                f"Expected {self.num_dofs} joint angles but got {angles.shape[-1]}.")
-
-        return self.origin * self.screws.apply(angles)
-
-    @ staticmethod
-    def make_revolute(name: str,
-                      origin: Transform,
-                      axis: Direction,
-                      child_link: RobotLink,
-                      device: Optional[torch.device] = None) -> "RobotJoint":
-        """Creates a revolute joint.
-
-        Args:
-            name (str): The name of the joint.
-            origin (Transform): The origin of the in its parent link.
-            axis (Direction): The axis of the joint.
-            child_link (RobotLink): The child link of the joint.
-            device (torch.device, optional): The device of the joint. Defaults to None.
-
-        Returns:
-            RobotJoint: The revolute joint.
-        """
-
-        origin_pos = origin.get_position()
-        screw = Screw.from_axis_and_origin(axis, origin_pos)
-
-        return RobotJoint(name, origin, [screw], child_link, device)
-
-    @ staticmethod
-    def make_fixed(name: str, origin: Transform, child_link: RobotLink, device: Optional[torch.device] = None) -> "RobotJoint":
-        """Creates a fixed joint.
-
-        Args:
-            name (str): The name of the joint.
-            origin (Transform): The origin of the in its parent link.
-            child_link (RobotLink): The child link of the joint.
-            device (torch.device, optional): The device of the joint. Defaults to None.
-
-        Returns:
-            RobotJoint: The fixed joint.
-        """
-
-        return RobotJoint(name, origin, [], child_link, device)
-
-    def to(self: RobotJointSubclass, device: torch.device) -> RobotJointSubclass:
-        """Moves this joint to the given device. This modifies the joint so other references to it will be modified as well.
-
-        Args:
-            device (torch.device): The device to move the joint to.
-
-            Returns:
-                RobotJoint: itself.
-        """
-
-        if self.screw.device != device:
-
-            self.screw = self.screw.to(device)
-            self.child_link = self.child_link.to(device)
-
-        return self
-
-
-# class RevoluteJoint(RobotJoint):
-#     def __init__(self, name: str,
-#                  origin: Position,
-#                  axis: Direction,
-#                  child_link: RobotLink,
-#                  device: Optional[torch.device] = None):
-#         """Creates a revolute joint.
-
-#         Args:
-#             origin: The origin of the joint.
-#             axis: The axis of the joint.
-#         """
-
-#         if device is None and origin.device != axis.device:
-#             raise ValueError(
-#                 f"The origin and axis must be on the same device, or the device must be specified. Origin is on {origin.device} and axis is on {axis.device}.")
-#         elif device is None:
-#             device = origin.device
-#         elif origin.pre_shape != axis.pre_shape:
-#             raise ValueError(
-#                 f"Cannot create a revolute joint with origin with pre shape {origin.pre_shape} and axis with pre shape {axis.pre_shape}. They must be the same")
-
-#         screw = Screw.from_axis_and_origin(
-#             axis.to(device=device), origin.to(device=device))
-
-#         super().__init__(name=name, screws=[screw],
-#                          child_link=child_link, device=device)
-
-###### TENSOR OPERATIONS ######
+        return torch.jit.script(kinematics)  # type: ignore
