@@ -84,11 +84,16 @@ class TensorWrapper(ABC):
         return self.__class__(new_tensor)
 
     @staticmethod
-    def stack(tensors: Iterable[TensorWrapperSubclass]) -> TensorWrapperSubclass:
+    def stack(tensors: Iterable[TensorWrapperSubclass], dim: int = 0) -> TensorWrapperSubclass:
         """Stacks a list of tensors into a single tensor. This is a static method, so it can be called on the class itself."""
 
         raw_tensors = [tensor.tensor for tensor in tensors]
-        stacked_tensor = torch.stack(raw_tensors)
+
+        # Adjust dim so that it works given the end shape
+        if dim < 0:
+            dim = dim - len(next(iter(tensors)).end_shape)
+
+        stacked_tensor = torch.stack(raw_tensors, dim=dim)
 
         return next(iter(tensors))[0].__class__(stacked_tensor)
 
@@ -154,8 +159,9 @@ class TensorIndexer(Generic[TensorWrapperSubclass]):
 
         self.tensor_wrapper = tensor_wrapper
         self.idx_dict = idx_dict
+        self.device = tensor_wrapper.device
 
-    def __getitem__(self, key: Union[str, int]) -> TensorWrapperSubclass:
+    def __getitem__(self, key: Union[str, int, slice]) -> TensorWrapperSubclass:
         if isinstance(key, str):
             return self.tensor_wrapper[..., self.idx_dict[key]]
         elif isinstance(key, int):
@@ -208,6 +214,16 @@ class TensorIndexer(Generic[TensorWrapperSubclass]):
 
     def apply(self, func: Callable[..., TensorWrapperSubclassApplyTarget], *args) -> "TensorIndexer[TensorWrapperSubclassApplyTarget]":
         return TensorIndexer(func(self.tensor_wrapper, *args), self.idx_dict)
+
+    def to_dict(self) -> Dict[str, TensorWrapperSubclass]:
+        return {idx_name: self[idx_name] for idx_name in self.get_idx_names()}
+
+    def to_raw_dict(self) -> Dict[str, torch.Tensor]:
+        return {idx_name: tensor_wrapper.tensor for idx_name, tensor_wrapper in self.to_dict().items()}
+
+    @property
+    def pre_shape(self) -> List[int]:
+        return self.tensor_wrapper.pre_shape()[:-1]
 
     @staticmethod
     def from_dict(tensor_dict: Dict[str, TensorWrapperSubclass]) -> "TensorIndexer[TensorWrapperSubclass]":

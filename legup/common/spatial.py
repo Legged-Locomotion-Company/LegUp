@@ -637,3 +637,14 @@ class ScrewSkew(TensorWrapper):
                                                     self_broadcast.tensor, theta_broadcast)
 
         return ScrewSkew(multiplied_screw_skew_tensor).exp_map()
+
+
+class ScrewJacobian(TensorWrapper):
+    def __init__(self, screw_jacobian_tensor: torch.Tensor):
+        if screw_jacobian_tensor.shape[-2] != 6:
+            raise ValueError("Screw jacobian must have second to last dim 6")
+
+        self.num_dofs = screw_jacobian_tensor.shape[-1]
+
+        self.initialize_base(screw_jacobian_tensor,
+                             end_shape=[6, self.num_dofs])

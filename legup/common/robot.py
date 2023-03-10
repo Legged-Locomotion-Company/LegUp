@@ -1,8 +1,8 @@
 from legup.common.tensor_types import TensorWrapper, TensorIndexer, WrappedScalar
-from legup.common.spatial import Transform, Screw, Position, Direction, ScrewSkew, RawSpatialMethods
+from legup.common.spatial import Transform, Screw, Position, Direction, ScrewSkew, RawSpatialMethods, ScrewJacobian
 from legup.common.link import Link, Joint
 
-from typing import List, Optional, Union, Dict, Iterable, TypeVar, Callable
+from typing import List, Optional, Union, Dict, Iterable, TypeVar, Callable, Tuple
 from copy import copy
 from abc import ABC, abstractmethod
 
@@ -19,43 +19,118 @@ class DOFAngle(TensorWrapper):
         super().initialize_base(joint_angles, [self.num_dofs])
 
 
+class KinematicsResult:
+    def __init__(self,
+                 transforms: List[Transform],
+                 jacobian: List[ScrewJacobian]):
+        self.transforms = transforms
+        self.jacobian = jacobian
+
+    def __add__(self, other: "KinematicsResult"):
+        return KinematicsResult(
+            transforms=self.transforms + other.transforms,
+            jacobian=self.jacobian + other.jacobian)
+
+
 class KinematicsObject:
     def __init__(self,
                  dof_body_screws: Union[Dict[str, Screw], TensorIndexer[Screw]],
-                 query_link_dof_chain_names: Dict[str, List[str]],
-                 query_link_zero_transforms: Dict[str, Transform],
-                 dof_order: Optional[Iterable[str]] = None):
+                 query_link_dict: Dict[str, Tuple[List[str], Transform]],
+                 dof_order: Optional[Iterable[str]] = None,):
+        """Initializes a kinematics object.
+
+        Args:
+            dof_body_screw_skews (Union[Dict[str, ScrewSkew], TensorIndexer[ScrewSkew]]):
+                This is mapping from dof names to their screw skews in space frame
+            query_link_dict (Dict[str, Tuple[List[str], Transform]]):
+                This is a dict that maps query link names
+                to a tuple of a list of dof names representing the
+                chain of dofs that affect this link,
+                and a transform that represents the
+                position of this link when dofs are at 0.
+            dof_order (Optional[Iterable[str]], optional):
+                The order of dofs for calls to this object. Passing this as None
+                will use the order of the keys in dof_body_screw_skews.
+        """
 
         if not isinstance(dof_body_screws, TensorIndexer):
-            dof_body_screws = TensorIndexer.from_dict(dof_body_screws)
+            dof_body_screws = \
+                TensorIndexer.from_dict(dof_body_screws)
 
         if dof_order is None:
             dof_order = dof_body_screws.get_idx_names()
         self.dof_order = list(dof_order)
 
-        self.dof_body_screws = dof_body_screws.reordered(self.dof_order)
+        self.query_link_names = list(query_link_dict.keys())
 
-        self.dof_body_screws = dof_body_screws
+        self.query_link_dict = query_link_dict
+
+        self.dof_body_screws = \
+            dof_body_screws.reordered(self.dof_order)
+
+    def __call__(self, joint_angles: torch.Tensor) -> List[Transform]:
+
+        dof_exps = \
+            self.dof_body_screws.apply(ScrewSkew.apply, joint_angles)
+
+        # Now we create a list of transforms to compose for each query link
+        query_link_transform_chains = \
+            {query_link_name: [dof_exps[dof_name]
+                               for dof_name in link_dof_chain_names] + [link_zero_transform]
+             for query_link_name, (link_dof_chain_names, link_zero_transform)
+             in self.query_link_dict.items()}
+
+        # Now we compose the transforms for each query link
+        query_link_transforms = \
+            {query_link_name: Transform.compose(*transforms)
+                for query_link_name, transforms in query_link_transform_chains.items()}
+
+        return [query_link_transforms[query_link_name]
+                for query_link_name in self.query_link_names]
 
     @staticmethod
-    def make_kinematics_function_python(dof_body_screws: Union[Dict[str, Screw], TensorIndexer[Screw]],
-                                        query_link_dof_chain_names: Dict[str, List[str]],
-                                        query_link_zero_transforms: Dict[str, Transform],
-                                        dof_order: Optional[Iterable[str]] = None):
+    def single_kinematics(dof_space_screws: TensorIndexer[Screw],
+                          dof_exps: TensorIndexer[Transform],
+                          dof_chain_names: List[str],
+                          zero_transform: Transform) -> KinematicsResult:
 
-        kin_obj = KinematicsObject(dof_body_screws,
-                                   query_link_dof_chain_names,
-                                   query_link_zero_transforms,
-                                   dof_order)
+        raw_result_position, raw_result_jacobian = \
+            KinematicsObject.raw_single_kinematics(
+                dof_space_screws=dof_space_screws.to_raw_dict(),
+                dof_exps=dof_exps.to_raw_dict(),
+                dof_chain_names=dof_chain_names,
+                zero_transform=zero_transform.tensor)
 
-        return kin_obj.make_function()
+        return KinematicsResult(
+            transforms=[Transform(raw_result_position)],
+            jacobian=[ScrewJacobian(raw_result_jacobian)])
 
-    def make_function(self):
-        def kinematics(joint_angles: torch.Tensor):
+    @ staticmethod
+    @ torch.jit.script  # type: ignore
+    def raw_single_kinematics(dof_space_screws: Dict[str, torch.Tensor],
+                              dof_exps: Dict[str, torch.Tensor],
+                              dof_chain_names: List[str],
+                              zero_transform: torch.Tensor
+                              ) -> Tuple[torch.Tensor, torch.Tensor]:
 
-            if joint_angles.shape[-1] != self.num_dofs:
-                raise ValueError(
-                    f"Joint angles must have {self.num_dofs} DOFs, but got {joint_angles.shape[-1]}.")
+        # Now for each dof in the chain, we create a composed list of transforms
+        shape = dof_exps[next(iter(dof_exps.keys()))].shape[:-1]
+
+        prev_dof_chain_prods: List[torch.Tensor] = [
+            torch.zeros((*shape, 4, 4), device=next(iter(dof_exps.values())).device)]
+
+        for dof_chain_name in dof_chain_names:
+            prev_dof_chain_prods.append(
+                prev_dof_chain_prods[-1] @ dof_exps[dof_chain_name])
+
+        dof_jacobian_cols = [(RawSpatialMethods.transform_adjoint(prev_prod) @ dof_space_screws[dof_name])
+                             for prev_prod, dof_name in zip(prev_dof_chain_prods, dof_chain_names)]
+
+        position_result = prev_dof_chain_prods[-1] @ zero_transform
+
+        jacobian_result = torch.stack(dof_jacobian_cols, dim=-1)
+
+        return position_result, jacobian_result
 
 
 class Robot:
@@ -158,8 +233,8 @@ class Robot:
             body_screw_skews_dict = {dof_name: dof_screw.skew()
                                      for dof_name, dof_screw in body_screws_dict.items()}
 
-            self.link_body_screw_skews[link_name] = \
-                TensorIndexer.from_dict(body_screw_skews_dict)
+            self.link_body_screw_skews[link_name] = TensorIndexer.from_dict(
+                body_screw_skews_dict)
 
     def get_dof_idx(self, dof_name: str) -> int:
         """Gets the index of a degree of freedom.
@@ -176,41 +251,37 @@ class Robot:
     def forward_kinematics(self, query_links: Iterable[str], dof_thetas: TensorIndexer[WrappedScalar]) -> TensorIndexer[Transform]:
 
         # First we create a tensor with the dof angles in the correct order
-        theta_tensor = \
-            dof_thetas.to_tensor(self.dof_screw_skews.get_idx_names())
+        theta_tensor = dof_thetas.to_tensor(
+            self.dof_screw_skews.get_idx_names())
 
         # Now we create a TensorIndexer to relate dof name strings to their relative transforms
-        dof_transforms = \
-            self.dof_screw_skews.apply(ScrewSkew.apply, theta_tensor)
+        dof_transforms = self.dof_screw_skews.apply(
+            ScrewSkew.apply, theta_tensor)
 
         # Now we need the joint chains so we can create a transform list for each joint
         query_link_joint_chains = {link_name: self.base_link.find_link_joint_chain(link_name)
                                    for link_name in query_links}
 
         # Now we use a set comprehension to pull out all the unique joint names
-        unique_joints = \
-            {joint
-             for joint_chain in query_link_joint_chains.values()
-             for joint in joint_chain}
+        unique_joints = {joint
+                         for joint_chain in query_link_joint_chains.values()
+                         for joint in joint_chain}
 
         # Now we create a list of transforms for each joint
-        joint_transform_lists = \
-            {joint.name: [joint.origin] + [dof_transforms[dof_name]
-                                           for dof_name in joint.get_dof_names()]
-             for joint in unique_joints}
+        joint_transform_lists = {joint.name: [joint.origin] + [dof_transforms[dof_name]
+                                                               for dof_name in joint.get_dof_names()]
+                                 for joint in unique_joints}
 
         # Now we create a list of transforms for each query link
-        query_link_transform_lists = \
-            {query_link_name: [transform
-                               for joint in joint_chain
-                               for transform in joint_transform_lists[joint.name]]
-                for query_link_name, joint_chain in query_link_joint_chains.items()}
+        query_link_transform_lists = {query_link_name: [transform
+                                                        for joint in joint_chain
+                                                        for transform in joint_transform_lists[joint.name]]
+                                      for query_link_name, joint_chain in query_link_joint_chains.items()}
 
         # Now we compose the transforms for each query link
-        query_link_transforms = \
-            {query_link_name: Transform.compose(*transform_list)
-             for query_link_name, transform_list
-             in query_link_transform_lists.items()}
+        query_link_transforms = {query_link_name: Transform.compose(*transform_list)
+                                 for query_link_name, transform_list
+                                 in query_link_transform_lists.items()}
 
         return TensorIndexer.from_dict(query_link_transforms)
 
@@ -310,8 +381,8 @@ class Robot:
         relevant_links = set(joint_parent_link_name_dict.values())
 
         # Now we compute the forward kinematics of all of the relevant links
-        link_zero_transforms = \
-            self.base_link.forward_kinematics(query_links=relevant_links)
+        link_zero_transforms = self.base_link.forward_kinematics(
+            query_links=relevant_links)
 
         # Here we map each joint name to its parent link transform
         joint_zero_transforms = {joint_name: link_zero_transforms[joint_parent_link_name_dict[joint_name]]
@@ -328,11 +399,12 @@ class Robot:
                                     for dof_name, dof_screw in joint.get_dofs().items()}
 
         # Here we transform each body screw to the space frame using the adjoint of the zero transform
-        dof_space_screw_dict = \
-            {dof_name: dof_zero_transform_dict[dof_name].adjoint() * dof_body_screw
-             for dof_name, dof_body_screw in relevant_dof_body_screws.items()}
+        dof_space_screw_dict = {dof_name: dof_zero_transform_dict[dof_name].adjoint() * dof_body_screw
+                                for dof_name, dof_body_screw in relevant_dof_body_screws.items()}
 
-        return KinematicsObject.make_function(dof_space_screw_dict, dof_order, dof_chains)
+        return KinematicsObject.make_kinematics_function(dof_space_screw_dict,
+                                                         dof_order,
+                                                         dof_chains)
 
     @ staticmethod
     def make_kinematics(dofs: TensorIndexer[ScrewSkew], joint_chains: List[List[Joint]]) -> torch.ScriptFunction:
@@ -374,30 +446,26 @@ class Robot:
             broadcast_dof_thetas = dof_thetas.broadcast_to(broadcast_shape)
 
             # Now we scale the screw skews by the dof angles
-            scaled_dof_screw_skews = \
-                broadcast_dof_screw_skews * \
+            scaled_dof_screw_skews = broadcast_dof_screw_skews * \
                 broadcast_dof_thetas[..., None, None]
 
             # Now we take the exp map of the scaled screw skews
-            dof_relative_transforms_tensor = \
-                _raw_twist_skew_exp_map(scaled_dof_screw_skews)
+            dof_relative_transforms_tensor = _raw_twist_skew_exp_map(
+                scaled_dof_screw_skews)
 
             # Now we turn the dof relative transforms into a list
-            dof_relative_transforms_list = \
-                [dof_relative_transforms_tensor[..., dof_idx, :, :]
-                 for dof_idx in range(len(dof_names))]
+            dof_relative_transforms_list = [dof_relative_transforms_tensor[..., dof_idx, :, :]
+                                            for dof_idx in range(len(dof_names))]
 
             # Here we create a dict which holds the relative transforms for each joint
             # To do this we combine the origin transform for the joint and its dof transforms
-            joint_transforms: List[torch.Tensor] = \
-                [torch.chain_matmul([joint_origin] + [dof_relative_transforms_list[dof_names.index(dof_name)]
-                                                      for dof_name in joint_dof_name_list])
-                 for joint_origin, joint_dof_name_list in zip(joint_origins, joint_dof_name_lists)]
+            joint_transforms: List[torch.Tensor] = [torch.chain_matmul([joint_origin] + [dof_relative_transforms_list[dof_names.index(dof_name)]
+                                                                                         for dof_name in joint_dof_name_list])
+                                                    for joint_origin, joint_dof_name_list in zip(joint_origins, joint_dof_name_lists)]
 
             # Now we combine the joint transforms for each joint chain
-            joint_chain_transforms = \
-                [torch.chain_matmul([joint_transforms[joint_names.index(joint_name)]
-                                     for joint_name in joint_chain_joint_names])
-                 for joint_chain_joint_names in joint_chain_joint_names]
+            joint_chain_transforms = [torch.chain_matmul([joint_transforms[joint_names.index(joint_name)]
+                                                          for joint_name in joint_chain_joint_names])
+                                      for joint_chain_joint_names in joint_chain_joint_names]
 
         return torch.jit.script(kinematics)  # type: ignore
