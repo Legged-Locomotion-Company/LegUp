@@ -127,25 +127,6 @@ class Joint:
 
         self.child_link.to(device)
 
-    # def forward_kinematics(self, joint_angles: "JointAngles") -> Transform:
-    #     """Computes the forward kinematics of the joint.
-
-    #     Args:
-    #         joint_angle_dict (Dict[str, torch.Tensor]): A dictionary mapping joint names to joint angles.
-
-    #     Returns:
-    #         Transform: The transform of the joint.
-
-    #     Raises:
-    #         ValueError: If the joint is not in the joint angle dictionary.
-    #     """
-
-    #     if self.name not in joint_angles:
-    #         raise ValueError(
-    #             f"Joint {self.name} is not in joint_angles.")
-
-    #     return self.apply(joint_angles[self.name])
-
     def get_dof_names(self) -> List[str]:
         dof_names_and_idxs = [(name, idx) for name, idx in
                               self.dof_idx_dict.items()]
@@ -158,25 +139,29 @@ class Joint:
         pass
 
 
-class RevoluteJoint(Joint):
-    """A revolute joint."""
+# class RevoluteJoint(Joint):
+#     """A revolute joint."""
 
-    def __init__(self, name: str,
-                 origin: Transform,
-                 axis: Direction,
-                 child_link: Link,
-                 device: Optional[torch.device] = None):
-        """Creates a revolute joint.
+#     def __init__(self, name: str,
+#                  origin: Transform,
+#                  axis: Direction,
+#                  child_link: Link,
+#                  device: Optional[torch.device] = None):
+#         """Creates a revolute joint.
 
-        Args:
-            name (str): The name of the joint.
-            origin (Transform): The origin of the in its parent link.
-            axis (Direction): The axis of the joint.
-            child_link (RobotLink): The child link of the joint.
-            device (torch.device, optional): The device of the joint. Defaults to None.
-        """
+#         Args:
+#             name (str): The name of the joint.
+#             origin (Transform): The origin of the in its parent link.
+#             axis (Direction): The axis of the joint.
+#             child_link (RobotLink): The child link of the joint.
+#             device (torch.device, optional): The device of the joint. Defaults to None.
+#         """
 
-        origin_pos = origin.get_position()
-        screw = Screw.from_axis_and_origin(axis, origin_pos)
+#         self.name = name
+#         self.origin = origin
+#         self.axis = axis
+#         self.child_link = child_link
+#         self.device = device
 
-        super().__init__(name, origin, [screw], child_link, device)
+#     def make_screw(self, absolute_origin: Transform) -> Screw:
+#         rotation = absolute_origin.get_rotation()
