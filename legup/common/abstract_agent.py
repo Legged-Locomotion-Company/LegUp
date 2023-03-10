@@ -139,12 +139,8 @@ class AbstractAgent(ABC):
         """
         pass
 
-    def generate_new_terrain(self, terrain_types: int, terrains_per_type: int) -> Optional[List[AbstractTerrain]]:
+    def generate_new_terrain(self) -> List[AbstractTerrain]:
         """Called after every rollout to check if the environment should change its terrain
-
-        Args:
-            terrain_types (int): Number of terrain types
-            terrains_per_type (int): Number of terrains per type
 
         Returns:
             Optional[List[Any]]: None if no change, new terrain configurations otherwise

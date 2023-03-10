@@ -78,11 +78,9 @@ class CameraConfig:
 @dataclass
 class IsaacConfig:
     env_spacing: float
-    num_agents_per_env: int # env = patch
-    num_envs_per_terrain_type: int
-
-    num_terrain: int
+    
     terrain_border: int
+    slope_threshold: float
     vertical_terrain_scale: float
     horizontal_terrain_scale: float
 
