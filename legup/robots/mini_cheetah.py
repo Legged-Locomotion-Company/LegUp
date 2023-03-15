@@ -1,5 +1,5 @@
 from legup.common.robot import Robot, RobotLeg, RobotJoint, RevoluteJoint
-from legup.common.spatial import Position, Direction
+from legup.common.spatial.spatial import Position, Direction
 
 from typing import List
 

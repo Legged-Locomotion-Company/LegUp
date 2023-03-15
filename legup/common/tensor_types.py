@@ -1,4 +1,4 @@
-from typing import Iterable, List, TypeVar, Dict, Union, Generic, get_args, Callable
+from typing import Iterable, List, TypeVar, Dict, Union, Generic, get_args, Callable, Type, Optional
 
 from abc import ABC, abstractmethod
 
@@ -19,11 +19,11 @@ class TensorWrapper(ABC):
         self.end_shape = end_shape
         self.device = tensor.device
 
-    def __getitem__(self: TensorWrapperSubclass, *index) -> TensorWrapperSubclass:
+    def __getitem__(self: TensorWrapperSubclass, index) -> TensorWrapperSubclass:
 
-        raw_index = [*index, *self.end_shape]
+        slices = tuple(index) + (slice(None),) * len(self.end_shape)
 
-        raw_slice_tensor = self.tensor[raw_index]
+        raw_slice_tensor = self.tensor[slices]
 
         return self.__class__(raw_slice_tensor)
 
@@ -89,13 +89,15 @@ class TensorWrapper(ABC):
 
         raw_tensors = [tensor.tensor for tensor in tensors]
 
+        wrapper_class = next(iter(tensors)).__class__
+
         # Adjust dim so that it works given the end shape
         if dim < 0:
             dim = dim - len(next(iter(tensors)).end_shape)
 
         stacked_tensor = torch.stack(raw_tensors, dim=dim)
 
-        return next(iter(tensors))[0].__class__(stacked_tensor)
+        return wrapper_class(stacked_tensor)
 
     def view(self: TensorWrapperSubclass, shape: Iterable[int]) -> TensorWrapperSubclass:
         if not isinstance(shape, list):
@@ -146,6 +148,20 @@ class TensorWrapper(ABC):
         """Returns the default device for the current context."""
 
         return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    @staticmethod
+    def make_wrapper_tensor_from_list(
+            TensorClass: Type[TensorWrapperSubclass],
+            list: Union[List[float], List[int]],
+            device: Optional[torch.device] = None
+    ) -> TensorWrapperSubclass:
+
+        if device is None:
+            device = TensorClass._default_device()
+
+        raw_float_tensor = torch.tensor(list, dtype=torch.float, device=device)
+
+        return TensorClass(raw_float_tensor)
 
 
 class WrappedScalar(TensorWrapper):
@@ -231,8 +247,8 @@ class TensorIndexer(Generic[TensorWrapperSubclass]):
         # Extract specific values type from tensor_dict
         tensor_type = list(tensor_dict.values())[0].__class__
 
-        idx_dict = {idx_name: idx for idx, idx_name in enumerate(
-                    tensor_dict)}
+        idx_dict = \
+            {idx_name: idx for idx, idx_name in enumerate(tensor_dict)}
 
         pre_shapes = [tensor_wrapper.pre_shape()
                       for tensor_wrapper in tensor_dict.values()]
