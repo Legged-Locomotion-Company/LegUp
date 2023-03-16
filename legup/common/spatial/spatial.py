@@ -179,6 +179,17 @@ class Transform(TensorWrapper):
         transform_tensor = torch.eye(4, device=device).repeat(*shape, 1, 1)
         return Transform(transform_tensor)
 
+    @staticmethod
+    def from_rotation_translation(rotation: Rotation, translation: Position) -> "Transform":
+        """Constructs a transform from a rotation and translation."""
+
+        if (translation_pre_shape := translation.pre_shape()) != (rotation_pre_shape := rotation.pre_shape()):
+            raise ValueError(
+                f"Rotation and translation must have the same pre-shape. Got {rotation_pre_shape} and {translation_pre_shape}.")
+
+        return Transform(raw_spatial_methods
+                         .transform_from_rotation_translation(rotation.tensor, translation.tensor))
+
     def extract_translation(self) -> Position:
         """Extracts the translation component of a transform."""
 
@@ -209,7 +220,7 @@ class Direction(TensorWrapper):
 
         self.initialize_base(direction_vec_tensor, end_shape=[3])
 
-    @staticmethod
+    @ staticmethod
     def from_list(list: Union[List[float], List[int]], device: Optional[torch.device] = None):
         return TensorWrapper.make_wrapper_tensor_from_list(Direction, list=list, device=device)
 
@@ -220,7 +231,7 @@ class Screw(TensorWrapper):
             raise ValueError("Screw vector must be of shape (6,).")
         self.initialize_base(screw_vec_tensor, end_shape=[6])
 
-    @staticmethod
+    @ staticmethod
     def empty_screw(shape: Sequence[int], device: Optional[torch.device] = None) -> "Screw":
         """Creates an empty screw.
 
@@ -240,7 +251,7 @@ class Screw(TensorWrapper):
         screw_tensor = torch.empty(list((*shape, 6)), device=device)
         return Screw(screw_tensor)
 
-    @staticmethod
+    @ staticmethod
     def from_axis_and_origin(axis: Direction, origin: Position, device: Optional[torch.device] = None) -> "Screw":
         """Creates a screw from an axis and an origin.
 

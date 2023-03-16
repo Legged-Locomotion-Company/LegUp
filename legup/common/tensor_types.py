@@ -147,6 +147,7 @@ class TensorWrapper(ABC):
     def _default_device():
         """Returns the default device for the current context."""
 
+        # type: ignore
         return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     @staticmethod

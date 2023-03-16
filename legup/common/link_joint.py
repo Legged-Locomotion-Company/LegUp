@@ -219,7 +219,7 @@ class Joint:
 
         self.to(device)
 
-    @ staticmethod
+    @staticmethod
     def make_revolute(name: str,
                       origin: Transform,
                       axis: Direction,
@@ -243,7 +243,7 @@ class Joint:
 
         return Joint(name, origin, [screw], child_link, device)
 
-    @ staticmethod
+    @staticmethod
     def make_fixed(name: str, origin: Transform, child_link: Link, device: Optional[torch.device] = None) -> "Joint":
         """Creates a fixed joint.
 

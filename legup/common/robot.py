@@ -26,6 +26,14 @@ class KinematicsResult:
         self.transform = transform
         self.jacobian = jacobian
 
+    @staticmethod
+    def stack(kinematics_results: List["KinematicsResult"]):
+        return KinematicsResult(
+            transform=Transform.stack(
+                [result.transform for result in kinematics_results], dim=-1),
+            jacobian=ScrewJacobian.stack(
+                [result.jacobian for result in kinematics_results], dim=-1))
+
 
 class KinematicsObject:
     def __init__(self,
@@ -79,22 +87,23 @@ class KinematicsObject:
 
         return [self.dof_order.index(dof_name) for dof_name in dof_names]
 
-    def __call__(self, joint_angles: torch.Tensor) -> List[KinematicsResult]:
+    def __call__(self, joint_angles: torch.Tensor) -> KinematicsResult:
 
         dof_exps = self.dof_space_screws.apply(Screw.apply, joint_angles)
 
         # Now for each query link, we compute the kinematics
-        return \
-            [KinematicsObject.single_kinematics(
-                dof_space_screws=self.dof_space_screws,
-                dof_exps=dof_exps,
-                dof_chain_names=link_dof_chain_names,
-                zero_transform=link_zero_transform)
+        link_kinematics = [KinematicsObject.single_kinematics(
+            dof_space_screws=self.dof_space_screws,
+            dof_exps=dof_exps,
+            dof_chain_names=link_dof_chain_names,
+            zero_transform=link_zero_transform)
 
-                for (link_zero_transform, link_dof_chain_names)
-                in zip(self.query_link_zero_transforms, self.query_link_dof_chains)]
+            for (link_zero_transform, link_dof_chain_names)
+            in zip(self.query_link_zero_transforms, self.query_link_dof_chains)]
 
-    @ staticmethod
+        return KinematicsResult.stack(link_kinematics)
+
+    @staticmethod
     def single_kinematics(dof_space_screws: TensorIndexer[Screw],
                           dof_exps: TensorIndexer[Transform],
                           dof_chain_names: List[str],
@@ -111,18 +120,16 @@ class KinematicsObject:
             KinematicsResult: This is a KinematicsResult object that contains the transforms and jacobian of the end effector
         """
 
-        raw_result_position, raw_result_jacobian = KinematicsObject.raw_single_kinematics(
+        raw_transform, raw_jacobian = KinematicsObject.raw_single_kinematics(
             dof_space_screws=dof_space_screws.to_raw_dict(),
             dof_exps=dof_exps.to_raw_dict(),
             dof_chain_names=dof_chain_names,
             zero_transform=zero_transform.tensor)
 
-        return KinematicsResult(
-            transform=Transform(raw_result_position),
-            jacobian=ScrewJacobian(raw_result_jacobian))
+        return KinematicsResult(Transform(raw_transform), ScrewJacobian(raw_jacobian))
 
-    @ staticmethod
-    # @ torch.jit.script  # type: ignore
+    @staticmethod
+    @torch.jit.script  # type: ignore
     def raw_single_kinematics(dof_space_screws: Dict[str, torch.Tensor],
                               dof_exps: Dict[str, torch.Tensor],
                               dof_chain_names: List[str],
@@ -159,16 +166,28 @@ class KinematicsObject:
                 prev_dof_chain_prods[-1] @ dof_exps[dof_chain_name])
 
         # Here we calculate the jacobians according to equation 5.11 in Modern Robotics
-        dof_space_jacobian_cols = [(raw_spatial_methods.transform_adjoint(prev_prod) @ dof_space_screws[dof_name])
-                                   for prev_prod, dof_name in zip(prev_dof_chain_prods, dof_chain_names)]
+        space_jacobian_cols = [(raw_spatial_methods.transform_adjoint(prev_prod) @ dof_space_screws[dof_name])
+                               for prev_prod, dof_name in zip(prev_dof_chain_prods, dof_chain_names)]
 
         # Now we calculate the end effector position according to the product of exponentials formula equation 5.9 and 4.14 in Modern Robotics
-        transform_result = prev_dof_chain_prods[-1] @ zero_transform
+        transform_space_body = prev_dof_chain_prods[-1] @ zero_transform
 
         # Now we stack the columns of the jacobian to get the full space jacobian matrix
-        jacobian_result = torch.stack(dof_space_jacobian_cols, dim=-1)
+        space_jacobian = torch.stack(space_jacobian_cols, dim=-1)
 
-        return transform_result, jacobian_result
+        # Now I get the ee jacobian in space frame by multiplying the space jacobian by the adjoint of the transform which
+        # translates the body frame to the space frame, without rotating it
+        translate_body_space = \
+            raw_spatial_methods.eyes_like(transform_space_body)
+        translate_body_space[..., 0:3, 3] = -transform_space_body[..., 0:3, 3]
+
+        # Calculate the ee jacobian in space frame
+        translate_body_space_adjoint = \
+            raw_spatial_methods.transform_adjoint(translate_body_space)
+        ee_jacobian_space_frame = \
+            translate_body_space_adjoint @ space_jacobian
+
+        return transform_space_body, ee_jacobian_space_frame
 
 
 class Robot:

@@ -296,3 +296,40 @@ def transform_adjoint(transform_tensor: torch.Tensor):
     result[..., 3:, :3] = translation_skew @ rotation_matrix
 
     return result
+
+
+@torch.jit.script  # type: ignore
+def eyes_shape(pre_shape: List[int], shape: int, device: torch.device):
+    """This function creates a batch of identity matrices with the given shape"""
+
+    return torch.eye(shape, device=device).repeat(pre_shape + [1, 1])
+
+
+@torch.jit.script  # type: ignore
+def eyes_like(tensor: torch.Tensor):
+    """This function creates a batch of identity matrices with the same shape
+    as the input tensor"""
+
+    output_pre_shape = tensor.shape[:-2]
+    size = tensor.shape[-1]
+
+    return eyes_shape(list(output_pre_shape), size, tensor.device)
+
+
+@torch.jit.script  # type: ignore
+def transform_from_rotation_translation(rotation: torch.Tensor, translation: torch.Tensor):
+    """This function creates a transform from a rotation matrix and translation vector"""
+
+    # Create a tensor to hold the result
+    result = torch.zeros(rotation.shape[:-2] + (4, 4), device=rotation.device)
+
+    # Assign the rotation matrix
+    result[..., :3, :3] = rotation
+
+    # Assign the translation vector
+    result[..., :3, 3] = translation
+
+    # Set the bottom right element to 1
+    result[..., 3, 3] = 1
+
+    return result
