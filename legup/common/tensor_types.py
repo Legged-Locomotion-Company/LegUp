@@ -109,6 +109,10 @@ class TensorWrapper(ABC):
         return self.__class__(new_raw_tensor)  # type: ignore
 
     def unsqueeze(self: TensorWrapperSubclass, idx: int) -> TensorWrapperSubclass:
+
+        if idx < 0:
+            idx = idx - len(self.end_shape)
+
         new_raw_tensor = self.tensor.unsqueeze(idx)
 
         return self.__class__(new_raw_tensor)

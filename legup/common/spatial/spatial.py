@@ -1,6 +1,6 @@
 from legup.common.tensor_types import TensorWrapper
 
-from typing import Optional, Sequence, List, Union
+from typing import Optional, Sequence, List, Union, Iterable
 
 from . import raw_spatial_methods
 
@@ -33,19 +33,38 @@ class Position(TensorWrapper):
 
         return result_transform
 
+    def __add__(self, other: Union["Position", Union[Iterable[float], Iterable[int]]]) -> "Position":
+        if not isinstance(other, Position):
+            other = Position.from_iter(list(other), device=self.device)
+        return self.compose(other)
+
+    def __sub__(self, other: Union["Position", Union[Iterable[float], Iterable[int]]]) -> "Position":
+        if not isinstance(other, Position):
+            other = Position.from_iter(list(other), device=self.device)
+        return self + (-other)
+
+    def __neg__(self) -> "Position":
+        return Position(-self.tensor)
+
+    def __mul__(self, other: Union[float, int]) -> "Position":
+        return Position(self.tensor * other)
+
+    def norm(self) -> torch.Tensor:
+        return torch.norm(self.tensor, dim=-1)
+
     @staticmethod
-    def from_list(list: Union[List[float], List[int]], device: Optional[torch.device] = None):
+    def from_iter(iterable:  Union[Iterable[float], Iterable[int]], device: Optional[torch.device] = None):
         """This function creates a position from a list of numbers
 
         Args:
-            list (Union[List[float], List[int]]): This is a list of numbers that will be assigned into this Position
+            list (Union[Iterable[float], Iterable[int]]): This is a list of numbers that will be assigned into this Position
             device (Optional[torch.device], optional): This defines the device for the new position. Defaults to None.
 
         Returns:
             Position: The created position object
         """
 
-        return TensorWrapper.make_wrapper_tensor_from_list(Position, list=list, device=device)
+        return TensorWrapper.make_wrapper_tensor_from_list(Position, list=list(iterable), device=device)
 
 
 class Rotation(TensorWrapper):

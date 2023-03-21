@@ -1,18 +1,17 @@
 import torch
 
-from legup.common.robot import Robot, KinematicsObject
-from legup.common.link_joint import Link, Joint
+from legup.common.kinematics import Link, Joint
 from legup.common.spatial.spatial import Transform, Position, Direction, Screw
 
 
-def test_planar_2r_robot_kinematics():
+def test_planar_2r_kinematics():
     """Test that the robot kinematics work for a 2r planar robot"""
 
     ee_link = Link("ee_link")
 
     fixed_wrist = Joint.make_fixed(
         name="wrist",
-        origin=Position.from_list([1, 0, 0]).make_transform(),
+        origin=Position.from_iter([1, 0, 0]).make_transform(),
         child_link=ee_link,
     )
 
@@ -21,7 +20,7 @@ def test_planar_2r_robot_kinematics():
 
     elbow_joint = Joint.make_revolute(
         name="elbow",
-        origin=Position.from_list([1, 0, 0]).make_transform(),
+        origin=Position.from_iter([1, 0, 0]).make_transform(),
         axis=Direction.from_list([0, 0, 1]),
         child_link=forearm_link)
 
@@ -36,10 +35,8 @@ def test_planar_2r_robot_kinematics():
     base_link = Link(name="base",
                      child_joints=[shoulder_joint])
 
-    robot = Robot("planar_2r",
-                  base_link=base_link)
-
-    kinematics = robot.make_kinematics(query_link_names=["ee_link", "forearm"])
+    kinematics = base_link.make_kinematics(
+        query_link_names=["ee_link", "forearm"])
 
     def stupid_kinematics_and_jacobian(joint_angles):
         """Improved kinematics for a 2r planar robot"""
@@ -77,11 +74,11 @@ def test_planar_2r_robot_kinematics():
              [torch.pi/4, 0],
              [torch.pi/4, torch.pi/4],
              [torch.pi/4, torch.pi/2]],
-            device=robot.device,
+            device=base_link.device,
             dtype=torch.float)
 
     extra_random_joint_angles = \
-        torch.rand((100, 2), device=robot.device,
+        torch.rand((100, 2), device=base_link.device,
                    dtype=torch.float) * 2 * torch.pi
 
     joint_angles = torch.cat((joint_angles, extra_random_joint_angles), dim=0)
@@ -167,15 +164,14 @@ def forward_kinematics_and_jacobian_3d_rrr(joint_angles):
     return T_0_4, jacobian
 
 
-def test_3d_rrr_robot_kinematics_against_expected():
-    """Test that the robot kinematics work for a 3D RRR robot
-       This function was written by GPT-4"""
+def test_3d_rrr_kinematics_against_expected():
+    """Test that the robot kinematics work for a 3D RRR robot"""
 
     ee_link = Link("ee_link")
 
     fixed_wrist = Joint.make_fixed(
         name="wrist",
-        origin=Position.from_list([1, 0, 0]).make_transform(),
+        origin=Position.from_iter([1, 0, 0]).make_transform(),
         child_link=ee_link,
     )
 
@@ -184,7 +180,7 @@ def test_3d_rrr_robot_kinematics_against_expected():
 
     elbow_joint = Joint.make_revolute(
         name="elbow",
-        origin=Position.from_list([1, 0, 0]).make_transform(),
+        origin=Position.from_iter([1, 0, 0]).make_transform(),
         axis=Direction.from_list([0, 1, 0]),
         child_link=forearm_link)
 
@@ -193,7 +189,7 @@ def test_3d_rrr_robot_kinematics_against_expected():
 
     shoulder_y_joint = Joint.make_revolute(
         name="shoulder_y",
-        origin=Position.from_list([0, 0, 0.1]).make_transform(),
+        origin=Position.from_iter([0, 0, 0.1]).make_transform(),
         axis=Direction.from_list([0, 1, 0]),
         child_link=upper_arm_link)
 
@@ -208,10 +204,10 @@ def test_3d_rrr_robot_kinematics_against_expected():
     base_link = Link(name="base",
                      child_joints=[shoulder_z_joint])
 
-    robot = Robot("3d_rrr_shoulder_z_shoulder_y",
-                  base_link=base_link)
+    # robot = Robot("3d_rrr_shoulder_z_shoulder_y",
+    #               base_link=base_link)
 
-    kinematics = robot.make_kinematics(query_link_names=["ee_link"])
+    kinematics = base_link.make_kinematics(query_link_names=["ee_link"])
 
     joint_angles = torch.tensor(
         [[0, 0, 0],
@@ -221,10 +217,10 @@ def test_3d_rrr_robot_kinematics_against_expected():
          [torch.pi/4, 0, 0],
          [torch.pi/4, torch.pi/4, 0],
          [torch.pi/4, torch.pi/2, 0]],
-        device=robot.device,
+        device=base_link.device,
         dtype=torch.float)
 
-    extra_random_joint_angles = torch.rand((100, 3), device=robot.device,
+    extra_random_joint_angles = torch.rand((100, 3), device=base_link.device,
                                            dtype=torch.float) * 2 * torch.pi
 
     joint_angles = torch.cat((joint_angles, extra_random_joint_angles), dim=0)
@@ -240,5 +236,7 @@ def test_3d_rrr_robot_kinematics_against_expected():
     # Extract the last 3 rows of the 6xnum_dofs jacobian
     result_jacobian = result.jacobian.tensor[..., 0, 3:, :]
 
-    assert result_pos.allclose(expected_pos, atol=1e-6)
-    assert result_jacobian.allclose(expected_jacobian, atol=1e-6)
+    assert result_pos.allclose(expected_pos.to(
+        device=result_pos.device), atol=1e-6)
+    assert result_jacobian.allclose(
+        expected_jacobian.to(device=result_jacobian.device), atol=1e-6)

@@ -7,6 +7,8 @@ from typing import Iterable, List, Optional, Dict, Tuple
 from legup.common.tensor_types import TensorWrapper, TensorIndexer, WrappedScalar
 from legup.common.spatial.spatial import Transform, Screw
 
+from .forward_kinematics import FKResult, FKFunction, QueryLinkInfo
+
 
 class Link:
     def __init__(self, name: str,
@@ -184,6 +186,59 @@ class Link:
                    for child_joint in self.child_joints_dict.values()
                    for link_name, link_transform in
                    child_joint.child_link.get_zero_transforms(query_links).items()}}
+
+    def make_kinematics(self, query_link_names: Iterable[str]) -> FKFunction:
+
+        # here we create a list of the joint chains that move each query link
+        query_link_joint_chains = {link_name: self.find_link_joint_chain(link_name)
+                                   for link_name in query_link_names}
+
+        # Here we create a dict that maps each relevant joint name to the joint object
+        relevant_joints = {joint.name: joint
+                           for query_link_joint_chain in query_link_joint_chains.values()
+                           for joint in query_link_joint_chain}
+
+        # Here we create a dict that maps each relevant joint name to its parent link name
+        joint_parent_link_name_dict = self.get_joint_parent_links_dict()
+
+        # Here we create a set of all of the relevant links to the query links, including the query links themselves
+        relevant_link_names = \
+            {*joint_parent_link_name_dict.values(), *query_link_names}
+
+        # Now we compute the zero transforms of all of the relevant links
+        link_zero_transforms = self.get_zero_transforms(
+            query_links=relevant_link_names)
+
+        # Here we map each joint name to its parent link transform
+        joint_zero_transforms = {joint_name: link_zero_transforms[joint_parent_link_name_dict[joint_name]]
+                                 for joint_name in relevant_joints.keys()}
+
+        # Here we map each dof name to its parent joint transforms
+        dof_zero_transform_dict = {dof_name: joint_zero_transforms[joint.name]
+                                   for joint in relevant_joints.values()
+                                   for dof_name in joint.get_dof_names()}
+
+        # Here we create a dict that maps each name of a dof that moves the query links to their screws
+        relevant_dof_body_screws = {dof_name: dof_screw
+                                    for joint in relevant_joints.values()
+                                    for dof_name, dof_screw in joint.dof_screws_dict.items()}
+
+        # Here we transform each body screw to the space frame using the adjoint of the zero transform
+        dof_space_screw_dict = {dof_name: dof_zero_transform_dict[dof_name].adjoint() * dof_body_screw
+                                for dof_name, dof_body_screw in relevant_dof_body_screws.items()}
+
+        query_link_dof_chain_names = {query_link_name: [dof_name for joint in query_link_joint_chain
+                                                        for dof_name in joint.get_dof_names()]
+                                      for query_link_name, query_link_joint_chain in query_link_joint_chains.items()}
+
+        # Here we create a list of the zero transforms of the query links and the joint chains that move them
+        query_link_info_list = \
+            [QueryLinkInfo(link_zero_transforms[query_link_name],
+                           query_link_dof_chain_names[query_link_name])
+             for query_link_name in query_link_names]
+
+        return FKFunction(dof_space_screws=dof_space_screw_dict,
+                          query_link_infos=query_link_info_list)
 
 
 class Joint:
