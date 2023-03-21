@@ -1,6 +1,6 @@
 from legup.common.kinematics import Joint, Link
 from .spatial import Position
-from .kinematics.inverse_kinematics import IKFunction, dls_ik, IKInput
+from .kinematics.inverse_kinematics import IKFunction, dls_ik
 
 from typing import Iterable, Optional, List, Dict
 from tensor_types import TensorWrapper
@@ -52,19 +52,22 @@ class LeggedRobot:
             self.primary_contact_kinematics(self.home_position).transform
 
     def relative_pos_ik(self,
-                        target_pos: Position,
+                        relative_targets: Position,
                         current_angles: torch.Tensor,
-                        ik_func: IKFunction = dls_ik):
+                        ik_func: IKFunction = dls_ik
+                        ) -> torch.Tensor:
 
-        kin_result = self.primary_contact_kinematics(current_angles)
+        absolute_targets = \
+            self.home_position_transforms.extract_translation() + relative_targets
+        new_angles = \
+            dls_ik.apply(absolute_targets, current_angles,
+                         self.primary_contact_kinematics)
 
-        pos_error = target_pos - kin_result.transform.extract_translation()
+        return new_angles
 
-        ik_func.apply()
-
-
-
-        angle_delta = ik_func(pos_error, kin_result.jacobian)
+    @staticmethod
+    def _default_device() -> torch.device:
+        return TensorWrapper._default_device()
 
     @property
     def dof_order(self) -> List[str]:
