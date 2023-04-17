@@ -34,16 +34,19 @@ class TensorTracker:
 class IsaacGymDynamics(AbstractDynamics):
     """IsaacGym implementation of environment dynamics, allows you to access and set the kinematic properties of the simulation"""
 
-    def __init__(self, sim, gym, num_agents: int):
+    def __init__(self, sim, gym, heightfield: torch.Tensor, num_agents: int, dt: float):
         """
         Args:
             sim (Sim): IsaacGym handle to simulation
             gym (Gym): IsaacGym handle to gym
+            heightfield (torch.Tensor) GPU tensor of shape (num_agents, patch_width, patch_width) for heightmap
             num_agents (int): number of parallel agents we have in the simulation
         """
         self.sim = sim
         self.gym = gym
         self.num_agents = num_agents
+        self.heightfield = heightfield
+        self.dt = dt
         self.state_tensors = []
 
         self._acquire_state_tensors()
@@ -195,6 +198,12 @@ class IsaacGymDynamics(AbstractDynamics):
             torch.Tensor: shape `(num_agents, num_rigid_bodies, 3)`
         """
         return self.net_contact_forces
+    
+    def get_joint_position_hist(self) -> torch.Tensor:
+        raise NotImplementedError() # TODO
+
+    def get_joint_velocity_hist(self) -> torch.Tensor:
+        raise NotImplementedError() # TODO
 
     def get_num_agents(self) -> int:
         """Gets number of agents in the entire simulation
@@ -203,3 +212,6 @@ class IsaacGymDynamics(AbstractDynamics):
             int: number of agents running
         """
         return self.num_agents
+    
+    def get_dt(self) -> float:
+        return self.dt

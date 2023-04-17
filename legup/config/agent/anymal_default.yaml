@@ -1,3 +1,5 @@
+_target_: agents.wild_anymal_agent.wild_anymal_agent.WildAnymalAgent
+
 env_name: anymal
 tensorboard_log_dir: ./anymal_train_tb
 command: [1.0, 0.0, 0.0]
