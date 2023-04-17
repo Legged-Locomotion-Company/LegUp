@@ -2,14 +2,12 @@ from isaacgym import gymapi, gymtorch
 
 import torch
 import numpy as np
-from omegaconf import OmegaConf
 
 from legup.common.abstract_env import AbstractEnv, StepResult
 from legup.common.abstract_agent import AbstractAgent
 from legup.environment.isaac.factory import IsaacGymFactory
 from legup.environment.isaac.dynamics import IsaacGymDynamics
-from legup.environment.isaac.config import IsaacConfig, AssetConfig, CameraConfig, SimulationConfig, TerrainConfig
-from legup.common.legup_config import validate
+from legup.environment.isaac.config import IsaacConfig
 
 class IsaacGymEnvironment(AbstractEnv):
     def __init__(self, env_config: IsaacConfig, agent: AbstractAgent, device: torch.device, **kwargs):
@@ -106,3 +104,7 @@ class IsaacGymEnvironment(AbstractEnv):
 
         # TODO: draw dyn information onto image
         return captured_image
+
+    def close(self) -> None:
+        self.gym.destroy_camera_sensor(self.sim, self.camera_handle)
+        self.gym.destroy_sim(self.sim)

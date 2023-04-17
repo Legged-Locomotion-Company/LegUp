@@ -1,12 +1,22 @@
-import isaacgym
+import isaacgym # need to import isaacgym before torch :(
 
 import hydra
 import torch
 from omegaconf import DictConfig
 
-
-from legup.common.abstract_env import AbstractEnv
-from legup.common.abstract_agent import AbstractAgent
+'''
+TODO:
+- IsaacGym
+  - support custom camera/viewer implementations, so we can switch between camera sensor and default viewer
+  - draw dynamics information as text onto camera (maybe support better vis on viewer)
+  - save simulation state before closing and restore if needed
+  - multi GPU
+- General
+  - main execution loop where RL/agent/env interacts with eachother. This is where we query agent to reset envs, and recreate the main env if so
+- Reinforcement Learning
+  - SB3 PPO integration
+  - Custom PPO
+'''
 
 def get_device(kwargs) -> torch.device:
     if 'device' in kwargs:
