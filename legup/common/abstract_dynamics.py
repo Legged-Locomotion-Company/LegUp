@@ -139,15 +139,6 @@ class AbstractDynamics(ABC):
         pass
 
     @abstractmethod
-    def get_curriculum_factor(self) -> float:
-        """Gets the current curriculum factor
-
-        Returns:
-            float: curriculum factor
-        """
-        pass
-
-    @abstractmethod
     def get_dt(self) -> float:
         """Gets the current timestep
 

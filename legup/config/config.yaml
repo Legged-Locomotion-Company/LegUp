@@ -1,8 +1,9 @@
-eval: False
-headless: True
-use_gpu: True
+kwargs:
+  eval: False
+  device: cuda
 
 defaults:
-  - environment: basic_env
-  - agent: anymal_default
-  - rl: default_ppo
+  - _self_
+  - agent: basic_default
+  - environment: isaacgym_default
+  # - rl: default_ppo
