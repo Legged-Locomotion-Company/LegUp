@@ -5,26 +5,26 @@ from typing import Optional, List
 
 import numpy as np
 
-from legup.common.legup_config import IsaacConfig
+from legup.environment.isaac.config import IsaacConfig, AssetConfig, CameraConfig, SimulationConfig, TerrainConfig
 from legup.common.abstract_agent import AbstractAgent
 from legup.common.abstract_terrain import AbstractTerrain
 
 class IsaacGymFactory:
 
     @staticmethod
-    def create_sim(gym, config: IsaacConfig):
+    def create_sim(gym, config: SimulationConfig):
         sim_params = gymapi.SimParams() # type: ignore
-        sim_params.dt = 1. / config.sim_config.dt
-        sim_params.substeps = config.sim_config.substeps
+        sim_params.dt = 1. / config.dt
+        sim_params.substeps = config.substeps
         sim_params.up_axis = gymapi.UP_AXIS_Z # type: ignore
         sim_params.gravity = gymapi.Vec3(0.0, 0.0, -9.81) # type: ignore
-        sim_params.use_gpu_pipeline = config.sim_config.use_gpu
+        sim_params.use_gpu_pipeline = config.use_gpu
 
-        sim_params.physx.use_gpu = config.sim_config.use_gpu
-        sim_params.physx.num_threads = config.sim_config.num_threads
+        sim_params.physx.use_gpu = config.use_gpu
+        sim_params.physx.num_threads = config.num_threads
         sim_params.physx.solver_type = 1  # more robust, slightly more expensive
-        sim_params.physx.num_position_iterations = config.sim_config.num_position_iterations
-        sim_params.physx.num_velocity_iterations = config.sim_config.num_velocity_iterations
+        sim_params.physx.num_position_iterations = config.num_position_iterations
+        sim_params.physx.num_velocity_iterations = config.num_velocity_iterations
         sim_params.physx.contact_offset = 0.01
         sim_params.physx.rest_offset = 0.0
         # sim_params.physx.max_gpu_contact_pairs = 8 * 1024 * 1024
@@ -41,7 +41,7 @@ class IsaacGymFactory:
         return gym.create_sim(0, 0, gymapi.SIM_PHYSX, sim_params) # type: ignore
 
     @staticmethod
-    def create_terrain(sim, gym, config: IsaacConfig, terrains: List[AbstractTerrain]) -> torch.Tensor:
+    def create_terrain(sim, gym, config: TerrainConfig, terrains: List[AbstractTerrain]) -> torch.Tensor:
         '''
             - each environment has a width of config.env_spacing and height of config.env_spacing
             - should probably add some border to each environment too
@@ -101,7 +101,7 @@ class IsaacGymFactory:
         asset_props["damping"].fill(config.asset_config.damping)
 
         # create environment structures
-        spacing = config.env_spacing
+        spacing = config.terrain_config.env_spacing
         num_envs = sum([terr.get_num_patches() for terr in terrains])
         num_agents = sum([terr.get_num_robots() * terr.get_num_patches() for terr in terrains])
         num_per_row = int(np.sqrt(num_envs))
@@ -118,7 +118,7 @@ class IsaacGymFactory:
         # initialize environments and agents in simulation
         global_idx = 0
         for terrain in terrains:
-            for patch_idx in terrain.get_num_patches():
+            for patch_idx in range(terrain.get_num_patches()):
                 env_handle = gym.create_env(sim, lower_space, upper_space, num_per_row)
                 
                 for actor_idx in range(terrain.get_num_robots()):
@@ -141,15 +141,15 @@ class IsaacGymFactory:
         return envs, actors, asset_handle
 
     @staticmethod
-    def create_camera(sim, gym, config: IsaacConfig):
+    def create_camera(sim, gym, config: CameraConfig):
         camera_props = gymapi.CameraProperties() # type: ignore
-        camera_props.width = config.camera_config.capture_width
-        camera_props.height = config.camera_config.capture_height
-        camera_props.use_collision_geometry = config.camera_config.draw_collision_mesh
+        camera_props.width = config.capture_width
+        camera_props.height = config.capture_height
+        camera_props.use_collision_geometry = config.draw_collision_mesh
 
-        render_env = gym.get_env(config.camera_config.render_target_env)
+        render_env = gym.get_env(config.render_target_env)
         render_actor = gym.get_actor_handle(
-            render_env, config.camera_config.render_target_actor)
+            render_env, config.render_target_actor)
         render_body_target = gym.get_actor_rigid_body_handle(
             render_env, render_actor, 0)  # 0 = body
 

@@ -1,2 +1,43 @@
-# dt = 1/cfg.dt, since we cannot specify fractions in yaml
-dt: 60
+_target_: environment.isaac.env.IsaacGymEnvironment
+
+env_config:
+  _target_: environment.isaac.config.IsaacConfig
+
+  terrain_config:
+    _target_: environment.isaac.config.TerrainConfig
+    env_spacing: 0
+    terrain_border: 0
+    slope_threshold: 0
+    vertical_terrain_scale: 0
+    horizontal_terrain_scale: 0
+
+  asset_config:
+    _target_: environment.isaac.config.AssetConfig
+    asset_path: ""
+    filename: ""
+    stiffness: 0
+    damping: 0
+
+  sim_config:
+    _target_: environment.isaac.config.SimulationConfig
+    dt: 0
+    substeps: 0
+    num_threads: 0
+    num_position_iterations: 0
+    num_velocity_iterations: 0
+    use_gpu: false
+
+  camera_config:
+    _target_: environment.isaac.config.CameraConfig
+    capture_width: 0
+    capture_height: 0
+    render_target_env: 0
+    render_target_actor: 0
+    
+    headless: True
+    draw_collision_mesh: false
+    draw_position: false
+    draw_rotation: false
+    draw_command: false
+
+agent: ${config.agent}

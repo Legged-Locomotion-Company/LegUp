@@ -19,7 +19,7 @@ class WildAnymalAgent(AbstractAgent):
 
         # TODO: add reward function shit here
         self.robot = robot
-
+        print("wild anymal created")
         self.reward_fn = Rewards(
             dynamics=self.dynamics,
             robot=self.robot,
