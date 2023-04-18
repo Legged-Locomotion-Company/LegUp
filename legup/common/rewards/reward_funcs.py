@@ -1,5 +1,6 @@
 from legup.common.abstract_dynamics import AbstractDynamics
-from legup.common.robot import Robot
+from legup.common.legged_robot import LeggedRobot
+from .rewards import RewardArgs
 
 from omegaconf import DictConfig
 
@@ -8,10 +9,63 @@ from typing import Iterable, Callable, Tuple, Dict
 import torch
 
 
+def lin_velocity(reward_args: RewardArgs):
+    """If the norm of the desired velocity is 0, then the reward is exp(-norm(v_act) ^ 2)
+    If the dot product of the desired velocity and the actual velocity is greater than the norm of the desired velocity, then the reward is 1.
+    Otherwise, the reward is exp(-(dot(v_des, v_act) - norm(v_des)) ^ 2)
+    """
+
+    # we need the norm of v_des 3 times, so we calculate it once and store it
+    # remove the last dimension of v_des_norm, since it is 1
+    v_des = reward_args.dynamics.command
+    v_act = reward_args.dynamics.get_linear_velocity()
+
+    v_act_norm_sq = torch.einsum('Bi,Bi->B', v_act, v_act)
+    v_des_norm = torch.norm(v_des, dim=-1).squeeze()  # (num_envs,)
+
+    act_dot_des = torch.einsum('Bi,Bi->B', v_des, v_act)
+
+    result = (-(act_dot_des - v_des_norm).square()).exp()
+
+    mask = v_des_norm == 0.0
+    result[mask] = (-torch.einsum(v_act_norm_sq[mask])).exp()
+
+    mask = act_dot_des > v_des_norm
+    result[mask] = 1.0
+
+    return result
+
+
+def ang_velocity(self):
+    """If the desired angular velocity is 0, then the reward is exp(-(w_act_yaw) ^ 2).
+        If the dot product of the desired angular velocity and the actual angular velocity is greater than the desired angular velocity, then the reward is 1.
+        Otherwise, the reward is exp(-(dot(w_des_yaw, w_act_yaw) - w_des_yaw) ^ 2)
+        """
+
+    command = self.command
+    w_des_yaw = command[:, :2]
+    w_act_yaw = self.dynamics.get_angular_velocity()[:, :2]
+
+    dots = w_des_yaw * w_act_yaw
+
+    result = torch.exp(-(dots - w_des_yaw)**2)
+
+    mask = w_des_yaw == 0.0
+    result[mask] = torch.exp(-w_act_yaw[mask]**2)
+
+    mask = dots > w_des_yaw
+    result[mask] = 1.0
+
+    result = result.squeeze()
+
+    self.reward_info['angular_velocity_reward'] = result * \
+        self.scale['velocity']
+
+
 class Rewards:
     def __init__(self,
                  dynamics: AbstractDynamics,
-                 robot: Robot,
+                 robot: LeggedRobot,
                  scale: DictConfig):
         """This class contains all of the reward functions.
         Instantiating it for a dynamics and robot allows rewards to be computed for that robot in that environment

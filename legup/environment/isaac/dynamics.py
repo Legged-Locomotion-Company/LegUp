@@ -1,7 +1,7 @@
 from isaacgym import gymtorch
 
 import torch
-from typing import Callable
+from typing import Callable, List
 
 from legup.common.abstract_dynamics import AbstractDynamics
 
@@ -31,6 +31,36 @@ class TensorTracker:
             self.last_version = self.state_tensor._version
 
 
+class HistoryBuffer:
+    def __init__(self, shape: torch.Size, hist_len: int, dtype, device):
+        """Stores a history of tensors
+
+        Args:
+            shape (torch.Size): Size of the tensors to store
+            hist_len (int): Number of tensors to store
+            dtype (_type_): _description_
+            device (_type_): _description_
+        """
+
+        self.head: List[torch.Tensor] = []
+
+        self._hist_len = hist_len
+        self.hist_stored = 0
+
+    def update(self, new_data: torch.Tensor):
+        """Updates the history buffer with new data
+
+        Args:
+            new_data (torch.Tensor): new data to add to the history buffer
+        """
+
+        if self.hist_stored < self._hist_len:
+            self.buffer[self.hist_stored] = new_data
+            self.hist_stored += 1
+        else:
+            self.buffer =
+
+
 class IsaacGymDynamics(AbstractDynamics):
     """IsaacGym implementation of environment dynamics, allows you to access and set the kinematic properties of the simulation"""
 
@@ -47,6 +77,8 @@ class IsaacGymDynamics(AbstractDynamics):
         self.state_tensors = []
 
         self._acquire_state_tensors()
+
+        self.joint_position_hist =
 
     def _acquire_state_tensors(self):
         """Initializes all the state tensors"""
@@ -135,6 +167,13 @@ class IsaacGymDynamics(AbstractDynamics):
             torch.Tensor: shape `(num_agents, num_degrees_of_freedom)`
         """
         return self.dof_pos
+
+    def get_joint_position_hist(self) -> torch.Tensor:
+        """Gets the joint positions of each robot
+        Returns:
+            torch.Tensor: shape `(num_agents, num_degrees_of_freedom)`
+        """
+        return self.dof_pos_hist
 
     def get_joint_velocity(self) -> torch.Tensor:
         """Gets the joint velocities of each robot

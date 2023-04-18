@@ -4,18 +4,27 @@ import torch
 import numpy as np
 
 from legup.common.abstract_env import AbstractEnv, StepResult
-from legup.environment.isaac.factory import IsaacGymFactory
-from legup.environment.isaac.dynamics import IsaacGymDynamics
-from legup.common.legup_config import IsaacConfig, AgentConfig
-from legup.agents.wild_anymal_agent.wild_anymal_agent import WildAnymalAgent
+from legup.common.abstract_agent import AbstractAgent
+from .factory import IsaacGymFactory
+from .dynamics import IsaacGymDynamics
+from legup.common.legup_config import AgentConfig
+from .isaac_config import IsaacConfig
+from legup.common.abstract_agent import AbstractAgent
 
+from typing import TypeVar, Generic
+
+
+AgentType = TypeVar('AgentType', bound=AbstractAgent)
+
+
+# class IsaacGymEnvironment(AbstractEnv, Generic[AgentType]):
+#     def __init__(self, env_config: IsaacConfig, agent: AgentType, device: torch.device):
 
 class IsaacGymEnvironment(AbstractEnv):
-    def __init__(self, env_config: IsaacConfig, agent_config: AgentConfig, device: torch.device):
+    def __init__(self, env_config: IsaacConfig, agent: AbstractAgent, device: torch.device):
         num_agents = env_config.num_agents_per_env * \
             env_config.num_envs_per_terrain_type * env_config.num_terrain
-        self.agent = WildAnymalAgent(
-            agent_config, None, num_agents, env_config.sim_config.dt, device)
+        self.agent = agent
         self.config = env_config
 
         self.all_agent_index = torch.arange(

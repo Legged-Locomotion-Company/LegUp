@@ -2,8 +2,9 @@ import torch
 import numpy as np
 from isaacgym import gymapi, terrain_utils
 
-from legup.common.legup_config import IsaacConfig
 from legup.common.abstract_agent import AbstractAgent
+
+from .isaac_config import IsaacConfig
 
 
 class IsaacGymFactory:
@@ -35,7 +36,8 @@ class IsaacGymFactory:
         # sim_params.physx.contact_collection
         # sim_params.physx.bounce_threshold_velocity
         # sim_params.physx.always_use_articulations
-        return gym.create_sim(0, 0, gymapi.SIM_PHYSX, sim_params)
+
+        return gym.create_sim(0, 0, gymapi.SIM_PHYSX, sim_params)  # type: ignore # nopep8
 
     @staticmethod
     def create_terrain(sim, gym, agent: AbstractAgent, config: IsaacConfig):
@@ -78,14 +80,14 @@ class IsaacGymFactory:
     @staticmethod
     def create_actors(sim, gym, agent: AbstractAgent, config: IsaacConfig):
         # create asset and initialize relevant properties
-        asset_options = gymapi.AssetOptions()  # TODO: more asset options
+        asset_options = gymapi.AssetOptions()  # type: ignore # TODO: more asset options
         asset_options.fix_base_link = True
         asset_options.armature = 0.01
         asset_handle = gym.load_asset(
             sim, config.asset_config.asset_path, config.asset_config.filename)
 
         asset_props = gym.get_asset_dof_properties(asset_handle)
-        asset_props["driveMode"].fill(gymapi.DOF_MODE_POS)
+        asset_props["driveMode"].fill(gymapi.DOF_MODE_POS)  # type: ignore
         asset_props["stiffness"].fill(config.asset_config.stiffness)
         asset_props["damping"].fill(config.asset_config.damping)
 
@@ -94,8 +96,8 @@ class IsaacGymFactory:
         num_envs = config.num_envs_per_terrain_type * config.num_terrain
         num_per_row = int(np.sqrt(num_envs))
 
-        lower_space = gymapi.Vec3(-spacing, -spacing, 0.0)
-        upper_space = gymapi.Vec3(spacing, spacing, spacing)
+        lower_space = gymapi.Vec3(-spacing, -spacing, 0.0)  # type: ignore
+        upper_space = gymapi.Vec3(spacing, spacing, spacing)  # type: ignore
 
         actor_positions = agent.sample_new_position(
             num_envs * config.num_agents_per_env, tuple(lower_space), tuple(upper_space))
@@ -110,9 +112,9 @@ class IsaacGymFactory:
                 sim, lower_space, upper_space, num_per_row)
             for actor_idx in range(config.num_agents_per_env):
                 idx = env_idx * num_envs + actor_idx
-                pose = gymapi.Transform()
-                pose.p = gymapi.Vec3(*actor_positions[idx])
-                pose.r = gymapi.Quat(*actor_rotations[idx])
+                pose = gymapi.Transform()  # type: ignore
+                pose.p = gymapi.Vec3(*actor_positions[idx])  # type: ignore
+                pose.r = gymapi.Quat(*actor_rotations[idx])  # type: ignore
 
                 actor_handle = gym.create_actor(
                     env_handle, asset_handle, pose, f"env-{env_idx}_actor-{actor_idx}", env_idx, 1)
@@ -129,7 +131,7 @@ class IsaacGymFactory:
 
     @staticmethod
     def create_camera(sim, gym, config: IsaacConfig):
-        camera_props = gymapi.CameraProperties()
+        camera_props = gymapi.CameraProperties()  # type: ignore
         camera_props.width = config.camera_config.capture_width
         camera_props.height = config.camera_config.capture_height
         camera_props.use_collision_geometry = config.camera_config.draw_collision_mesh
@@ -142,14 +144,15 @@ class IsaacGymFactory:
 
         camera_handle = gym.create_camera_sensor(render_env, camera_props)
 
-        camera_offset = gymapi.Vec3(-0.5, -0.5, 1)
-        camera_rotation = gymapi.Quat().from_euler_zyx(
+        camera_offset = gymapi.Vec3(-0.5, -0.5, 1)  # type: ignore
+        camera_rotation = gymapi.Quat().from_euler_zyx(  # type: ignore
             np.radians(0), np.radians(45), np.radians(45))
-        camera_transform = gymapi.Transform(camera_offset, camera_rotation)
+        camera_transform = gymapi.Transform(  # type: ignore
+            camera_offset, camera_rotation)  # type: ignore
 
         gym.attach_camera_to_body(
-            camera_handle, render_env, render_body_target, camera_transform, gymapi.FOLLOW_POSITION)
-        gym.set_light_parameters(sim, 0, gymapi.Vec3(
-            0.8, 0.8, 0.8), gymapi.Vec3(0.8, 0.8, 0.8), gymapi.Vec3(0, 0, 0))
+            camera_handle, render_env, render_body_target, camera_transform, gymapi.FOLLOW_POSITION)  # type: ignore
+        gym.set_light_parameters(sim, 0, gymapi.Vec3(  # type: ignore
+            0.8, 0.8, 0.8), gymapi.Vec3(0.8, 0.8, 0.8), gymapi.Vec3(0, 0, 0))  # type: ignore
 
         return camera_handle

@@ -6,14 +6,25 @@ from omegaconf import DictConfig
 
 from legup.common.abstract_agent import AbstractAgent
 from legup.common.abstract_dynamics import AbstractDynamics
-from legup.common.robot import Robot
-from legup.common.rewards import Reward
+from legup.common.legged_robot import LeggedRobot
+from legup.common.rewards.reward_funcs import Reward
+from .wild_anymal_config import WildAnymalConfig
 
 
 
 class WildAnymalAgent(AbstractAgent):
-    def __init__(self, config: DictConfig, robot: Robot, dynamics: AbstractDynamics, num_agents: int, device: Optional[torch.device] = None):
-        super().__init__(config=config, robot=robot, dynamics=dynamics, num_agents=num_agents, device=device)
+    def __init__(self,
+                 config: WildAnymalConfig,
+                 robot: LeggedRobot,
+                 dynamics: AbstractDynamics,
+                 num_agents: int,
+                 device: Optional[torch.device] = None):
+        
+        super().__init__(config=config,
+                         robot=robot,
+                         dynamics=dynamics,
+                         num_agents=num_agents,
+                         device=device)
         # TODO: add type hints here once the types are implemented
         # TODO: figure out how to get the device
 
@@ -54,7 +65,7 @@ class WildAnymalAgent(AbstractAgent):
         phase_offsets = torch.tensor(
             [0, torch.pi, torch.pi, 0]).to(self.device)
 
-        phase = (self.ep_lens * self.dt).expand(4, self.num_agents).T * \
+        phase = (self.ep_lens * self.dynamics.get_dt()).expand(4, self.num_agents).T * \
             base_frequencies * torch.pi * 2
         phase += phase_offsets.expand(phase.shape)
 

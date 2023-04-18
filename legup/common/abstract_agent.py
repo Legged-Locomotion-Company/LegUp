@@ -1,21 +1,25 @@
 import torch
 from abc import ABC, abstractmethod
-from typing import Tuple, Optional, List, Any
+from typing import Tuple, Optional, List, Any, TypeVar, Generic
 import warnings
 
 from omegaconf import DictConfig
 
 from legup.common.abstract_dynamics import AbstractDynamics
 from legup.common.abstract_terrain import AbstractTerrain
-from legup.common.robot import Robot
+from legup.common.legged_robot import LeggedRobot
+from legup.common.legup_config import AgentConfig
+
+AgentType = TypeVar("AgentType", bound="AbstractAgent")
+AgentConfigType = TypeVar("AgentConfigType", bound="AgentConfig")
 
 
-class AbstractAgent(ABC):
+class AbstractAgent(ABC, Generic[AgentConfigType]):
     """An abstract class for agents to inherit."""
 
-    def __init__(self,
-                 config: DictConfig,
-                 robot: Robot,
+    def __init__(self: AgentType,
+                 config: AgentConfigType,
+                 robot: LeggedRobot,
                  dynamics: AbstractDynamics,
                  num_agents: int,
                  device: Optional[torch.device] = None):
@@ -115,7 +119,7 @@ class AbstractAgent(ABC):
         """
         pass
 
-    @bstractmethod
+    @abstractmethod
     def sample_new_quaternion(self, num_quats: int) -> torch.Tensor:
         """Called when the environment needs to sample new quaternions for robot root
 
@@ -127,7 +131,7 @@ class AbstractAgent(ABC):
         """
         pass
 
-    @bstractmethod
+    @abstractmethod
     def sample_new_joint_pos(self, num_pos: int) -> torch.Tensor:
         """Called when the environment needs to sample new robot joint positions
 
@@ -148,3 +152,32 @@ class AbstractAgent(ABC):
             Optional[List[Any]]: None if no change, new terrain configurations otherwise
         """
         return None
+
+    @staticmethod
+    @abstractmethod
+    def config_type() -> AgentConfigType:
+        """Returns the config type for the agent
+
+        Returns:
+            AgentConfigType: The config type for the agent
+        """
+        return AgentConfigType
+
+
+class CommandAgent(ABC):
+    """An abstract interface for agents that have walking commands
+    There is a default implementation of a command sampling function,
+    but probably you will want to override it with custom behavior"""
+
+    def sample_commands(self, num_commands: int) -> torch.Tensor:
+        """Called when the environment needs to sample new commands for the agent
+
+        Args:
+            num_commands (int): number of commands to sample
+
+        Returns:
+            torch.Tensor: returns sampled commands of shape `(num_agents, command_space)`
+        """
+
+        raise NotImplementedError(
+            "Have not implemented default command sampler yet.")
