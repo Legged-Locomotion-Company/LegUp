@@ -9,30 +9,39 @@ from legup.environment.isaac.factory import IsaacGymFactory
 from legup.environment.isaac.dynamics import IsaacGymDynamics
 from legup.environment.isaac.config import IsaacConfig
 
+
 class IsaacGymEnvironment(AbstractEnv):
     def __init__(self, env_config: IsaacConfig, agent: AbstractAgent, device: torch.device, **kwargs):
         env_terrains = agent.generate_new_terrain()
         if len(env_terrains) == 0:
             raise RuntimeError('Agent returned an empty list of terrains')
-        
-        num_agents = num_agents = sum([terr.get_num_robots() * terr.get_num_patches() for terr in env_terrains])
+
+        num_agents = num_agents = sum(
+            [terr.get_num_robots() * terr.get_num_patches() for terr in env_terrains])
         self.agent = agent
         self.config = env_config
         self.device = device
 
-        self.all_agent_index = torch.arange(num_agents, dtype=torch.long, device=self.device)
-        self.terminated_agents = torch.ones(num_agents, dtype=torch.bool, device=self.device)
-        self.dones = torch.zeros(num_agents, dtype=torch.bool, device=self.device)
+        self.all_agent_index = torch.arange(
+            num_agents, dtype=torch.long, device=self.device)
+        self.terminated_agents = torch.ones(
+            num_agents, dtype=torch.bool, device=self.device)
+        self.dones = torch.zeros(
+            num_agents, dtype=torch.bool, device=self.device)
 
         self.gym = gymapi.acquire_gym()  # type: ignore
         self.sim = IsaacGymFactory.create_sim(self.gym, env_config.sim_config)
-        
-        self.heightfield = IsaacGymFactory.create_terrain(self.sim, self.gym, env_config.terrain_config, env_terrains).to(self.device)
-        self.envs, self.actors, self.asset = IsaacGymFactory.create_actors(self.sim, self.gym, self.agent, env_config, env_terrains)
-        self.camera_handle = IsaacGymFactory.create_camera(self.sim, self.gym, env_config.camera_config)
+
+        self.heightfield = IsaacGymFactory.create_terrain(
+            self.sim, self.gym, env_config.terrain_config, env_terrains).to(self.device)
+        self.envs, self.actors, self.asset = IsaacGymFactory.create_actors(
+            self.sim, self.gym, self.agent, env_config, env_terrains)
+        self.camera_handle = IsaacGymFactory.create_camera(
+            self.sim, self.gym, env_config.camera_config)
         self.gym.prepare_sim(self.sim)
 
-        self.dyn = IsaacGymDynamics(self.sim, self.gym, self.heightfield, num_agents, env_config.sim_config.dt)
+        self.dyn = IsaacGymDynamics(
+            self.sim, self.gym, self.heightfield, num_agents, env_config.sim_config.dt)
 
     def step(self, actions: torch.Tensor) -> StepResult:
         """Moves robots using `actions`, steps the simulation forward, updates graphics, and refreshes state tensors
@@ -98,7 +107,7 @@ class IsaacGymEnvironment(AbstractEnv):
         cam_config = self.config.camera_config
         render_target = self.envs[cam_config.render_target_env]
         captured_image = self.gym.get_camera_image(
-            self.sim, render_target, self.camera_handle, gymapi.IMAGE_COLOR) # type: ignore
+            self.sim, render_target, self.camera_handle, gymapi.IMAGE_COLOR)  # type: ignore
         captured_image = captured_image.reshape(
             cam_config.capture_height, cam_config.capture_width, 4)
 

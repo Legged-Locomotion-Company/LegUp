@@ -4,7 +4,7 @@ from typing import Tuple, List
 
 from legup.common.abstract_dynamics import AbstractDynamics
 from legup.common.abstract_terrain import AbstractTerrain
-from legup.common.robot import Robot
+from legup.common.legged_robot import LeggedRobot
 
 
 class AbstractAgent(ABC):
