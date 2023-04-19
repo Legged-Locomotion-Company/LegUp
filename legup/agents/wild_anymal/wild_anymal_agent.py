@@ -8,7 +8,7 @@ from legup.common.abstract_agent import AbstractAgent
 from legup.common.abstract_dynamics import AbstractDynamics
 from legup.common.legged_robot import LeggedRobot
 from legup.common.rewards import calculate_reward
-from .wild_anymal_config import WildAnymalConfig
+from legup.agents.wild_anymal.wild_anymal_config import WildAnymalConfig
 
 
 
