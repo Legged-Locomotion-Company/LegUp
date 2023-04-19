@@ -1,6 +1,6 @@
 from legup.common.abstract_dynamics import AbstractDynamics
 from legup.common.legged_robot import LeggedRobot
-from .rewards import RewardArgs
+from legup.common.rewards.rewards import reward, RewardArgs
 
 from omegaconf import DictConfig
 
@@ -9,7 +9,8 @@ from typing import Iterable, Callable, Tuple, Dict
 import torch
 
 
-def lin_velocity(reward_args: RewardArgs):
+@reward
+def lin_velocity(reward_args: RewardArgs) -> torch.Tensor:
     """If the norm of the desired velocity is 0, then the reward is exp(-norm(v_act) ^ 2)
     If the dot product of the desired velocity and the actual velocity is greater than the norm of the desired velocity, then the reward is 1.
     Otherwise, the reward is exp(-(dot(v_des, v_act) - norm(v_des)) ^ 2)
@@ -36,15 +37,19 @@ def lin_velocity(reward_args: RewardArgs):
     return result
 
 
-def ang_velocity(self):
+@reward
+def ang_velocity(reward_args: RewardArgs) -> torch.Tensor:
     """If the desired angular velocity is 0, then the reward is exp(-(w_act_yaw) ^ 2).
-        If the dot product of the desired angular velocity and the actual angular velocity is greater than the desired angular velocity, then the reward is 1.
-        Otherwise, the reward is exp(-(dot(w_des_yaw, w_act_yaw) - w_des_yaw) ^ 2)
-        """
+    If the dot product of the desired angular velocity and the actual angular velocity is greater than the desired angular velocity, then the reward is 1.
+    Otherwise, the reward is exp(-(dot(w_des_yaw, w_act_yaw) - w_des_yaw) ^ 2)
+    """
 
-    command = self.command
+    if (command := getattr(reward_args, 'command')) is None:
+        command = torch.zeros((reward_args.dynamics.get_num_agents(), 3),
+                              device=reward_args.dynamics.device())
+
     w_des_yaw = command[:, :2]
-    w_act_yaw = self.dynamics.get_angular_velocity()[:, :2]
+    w_act_yaw = reward_args.dynamics.get_angular_velocity()[:, :2]
 
     dots = w_des_yaw * w_act_yaw
 
@@ -58,8 +63,7 @@ def ang_velocity(self):
 
     result = result.squeeze()
 
-    self.reward_info['angular_velocity_reward'] = result * \
-        self.scale['velocity']
+    return result
 
 
 class Rewards:
