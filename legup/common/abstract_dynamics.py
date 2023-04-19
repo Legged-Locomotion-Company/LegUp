@@ -47,29 +47,12 @@ class AbstractDynamics(ABC):
         pass
 
     @abstractmethod
-    def get_joint_position_hist(self) -> torch.Tensor:
-        """Gets the joint positions of each robot over the last few environment steps TODO decide oh a history length
-
-        Returns:
-            torch.Tensor: shape `(hist_length, num_environments, num_degrees_of_freedom)`. Index 0 is most recent, -1 is the oldest
-        """
-        pass
-
-    @abstractmethod
     def get_joint_velocity(self) -> torch.Tensor:
         """Gets the joint velocities of each robot
         Returns:
             torch.Tensor: shape `(num_environments, num_degrees_of_freedom)`
         """
         pass
-
-    @abstractmethod
-    def get_joint_velocity_hist(self) -> torch.Tensor:
-        """Gets the joint velocities of each robot over the last few environment steps TODO: decide on a hist length
-
-        Returns:
-            torch.Tensor: shape `(hist_length, num_environments, num_degrees_of_freedom)`. Index 0 is most recent, -1 is the oldest
-        """
 
     @abstractmethod
     def get_joint_torque(self) -> torch.Tensor:

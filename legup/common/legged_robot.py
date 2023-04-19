@@ -1,6 +1,6 @@
 from legup.common.kinematics import Joint, Link
-from .spatial import Position
-from .kinematics.inverse_kinematics import IKFunction, dls_ik
+from legup.common.spatial import Position
+from legup.common.kinematics.inverse_kinematics import IKFunction, dls_ik
 
 from typing import Iterable, Optional, List, Dict
 from tensor_types import TensorWrapper

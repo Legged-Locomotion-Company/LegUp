@@ -15,28 +15,21 @@ from .wild_anymal_config import WildAnymalConfig
 class WildAnymalAgent(AbstractAgent):
     def __init__(self,
                  config: WildAnymalConfig,
-                 robot: LeggedRobot,
-                 dynamics: AbstractDynamics,
-                 num_agents: int,
-                 device: Optional[torch.device] = None):
+                 device: torch.device,
+                 **kwargs):
         
-        super().__init__(config=config,
-                         robot=robot,
-                         dynamics=dynamics,
-                         num_agents=num_agents,
-                         device=device)
         # TODO: add type hints here once the types are implemented
         # TODO: figure out how to get the device
 
         # TODO: add reward function shit here
         self.robot = robot
         print("wild anymal created")
-        self.reward_fn = Rewards(
-            dynamics=self.dynamics,
-            robot=self.robot,
-            scale=self.config.scale)
+        # self.reward_fn = Rewards(
+        #     dynamics=self.dynamics,
+        #     robot=self.robot,
+        #     scale=self.config.scale)
         
-        self.command = torch.Tensor([1,0,0], device=self.device).repeat(self.num_agents, 1)
+        # self.command = torch.Tensor([1,0,0], device=self.device).repeat(self.num_agents, 1)
 
 
     def make_actions(self, actions: torch.Tensor) -> torch.Tensor:
