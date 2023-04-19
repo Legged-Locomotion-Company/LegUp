@@ -5,20 +5,9 @@ from omegaconf import OmegaConf
 
 
 @dataclass
-class AnymalAgentConfig:
-    env_name: str
+class AgentConfig:
+    agent_name: str
     tensorboard_log_dir: str
-
-    # command: List
-    # turn_command: float
-    # knee_threshold: List
-    # max_torque: float
-    # max_tilt: float
-    # clip_bias: float
-    # pos_delta_clip: float
-    # phase_delta_clip: float
-    # reward_scales: RewardScalesConfig
-    # curriculum_exponent: float
 
 
 @dataclass

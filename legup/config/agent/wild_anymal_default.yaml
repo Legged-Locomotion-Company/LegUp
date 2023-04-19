@@ -1,0 +1,36 @@
+_target_: agents.wild_anymal_agent.wild_anymal_agent.WildAnymalAgent
+
+agent_config:
+  # general agent parameters
+  _target_: agents.wild_anymal_agent.wild_anymal_config.WildAnymalConfig
+  agent_name: wild_anymal
+  tensorboard_log_dir: ./anymal_train_tb
+
+  # wild anymal agent parameters
+  max_torque: 20
+  # 3pi/2
+  max_tilt: 4.71239
+
+  pos_delta_clip: 0.25
+  phase_delta_clip: 1.0
+
+  robot: mini_cheetah
+  dof_limits:
+    knee_FL: [0.4, 0.4]
+    knee_FR: [0.4, 0.4]
+    knee_BL: [0.4, 0.4]
+    knee_BR: [0.4, 0.4]
+
+  reward_scales:
+    _target_: agents.wild_anymal_agent.wild_anymal_config.WildAnymalRewardScales
+    velocity: 0.75
+    body_motion: 0.1
+    foot_clearance: 0.003
+    shank_knee_col: 0.1
+    joint_velocities: 0.001
+    joint_constraints: 0.08
+    target_smoothness: 0.003
+    torque: 0.000025
+    slip: 0.003
+    pos_delta_clip: 0.01
+    phase_clip: 0.01
