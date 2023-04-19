@@ -1,4 +1,4 @@
-from typing import NamedTuple, Dict, Callable
+from typing import NamedTuple, Dict, Callable, Optional, Union, TypeVar
 
 from legup.common.abstract_dynamics import AbstractDynamics
 from legup.common.legged_robot import LeggedRobot
@@ -9,8 +9,6 @@ import torch
 class RewardArgs(NamedTuple):
     dynamics: AbstractDynamics
     robot: LeggedRobot
-    command: torch.Tensor
-    curriculum_factor: float
 
 
 rewards_dict: Dict[str, Callable[[RewardArgs], torch.Tensor]] = {}
@@ -31,7 +29,14 @@ def calculate_reward(reward_args: RewardArgs, reward_scale: Dict[str, float]):
             for name, reward_func in rewards_dict.items()}
 
 
-def reward(reward_func: Callable[[RewardArgs], torch.Tensor]) -> Callable[[RewardArgs], torch.Tensor]:
+RewardArgsType = TypeVar('RewardArgsType', bound=RewardArgs)
+
+reward_func_type = Union[
+    Callable[[RewardArgs], torch.Tensor],
+    Callable[[RewardArgsType], torch.Tensor]]
+
+
+def reward(reward_func: Optional[reward_func_type] = None, reward_name: Optional[str] = None) -> Callable:
     """
     A decorator to register custom reward functions in a global rewards dictionary.
 
@@ -68,5 +73,21 @@ def reward(reward_func: Callable[[RewardArgs], torch.Tensor]) -> Callable[[Rewar
         The same reward function passed as input, for further use in the code.
     """
 
-    rewards_dict[reward_func.__name__] = reward_func
+    if reward_name is not None:
+        return lambda reward_func: _reward(reward_func, reward_name)
+    elif reward_func is None:
+        raise ValueError("The reward function cannot be None.")
+
+    reward_name = reward_func.__name__
+
+    return _reward(reward_func, reward_func.__name__)
+
+
+def _reward(reward_func: reward_func_type, reward_name: str) -> Callable[[RewardArgs], torch.Tensor]:
+
+    if reward_name in rewards_dict:
+        raise ValueError(
+            f"A reward called {reward_name} has been registered twice.")
+
+    rewards_dict[reward_name] = reward_func
     return reward_func

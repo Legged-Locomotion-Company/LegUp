@@ -1,0 +1,2 @@
+from legup.agents.wild_anymal.wild_anymal_config import WildAnymalConfig, WildAnymalRewardScales
+from legup.agents.wild_anymal.wild_anymal_agent import WildAnymalAgent
