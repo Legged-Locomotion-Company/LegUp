@@ -11,8 +11,8 @@ max_torque: 20
 # 3pi/2
 max_tilt: 4.71239
 
-pos_delta_clip: 0.1
-phase_delta_clip: 0.25
+pos_delta_clip: 0.25
+phase_delta_clip: 1.0
 
 reward_scales:
   velocity: 0.75
