@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 from legup.common.legup_config import AgentConfig
 
-from typing import List
+from typing import List, Dict
 
 
 @dataclass
@@ -22,10 +22,8 @@ class WildAnymalRewardScales:
 
 @dataclass
 class WildAnymalConfig(AgentConfig):
-    knee_threshold: List
     max_torque: float
     max_tilt: float
-    clip_bias: float
     pos_delta_clip: float
     phase_delta_clip: float
     reward_scales: WildAnymalRewardScales

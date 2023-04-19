@@ -7,14 +7,14 @@ from omegaconf import DictConfig
 from legup.common.abstract_agent import AbstractAgent
 from legup.common.abstract_dynamics import AbstractDynamics
 from legup.common.legged_robot import LeggedRobot
-from legup.common.rewards import calculate_reward
+from legup.common.rewards import calculate_reward, RewardArgs
 from legup.agents.wild_anymal.wild_anymal_config import WildAnymalConfig
-
 
 
 class WildAnymalAgent(AbstractAgent):
     def __init__(self,
                  config: WildAnymalConfig,
+                 robot: LeggedRobot,
                  device: torch.device,
                  **kwargs):
         
@@ -25,13 +25,9 @@ class WildAnymalAgent(AbstractAgent):
         
         self.robot = robot
         self.device = device
+        self.config = config
+
         print("wild anymal created")
-        # self.reward_fn = Rewards(
-        #     dynamics=self.dynamics,
-        #     robot=self.robot,
-        #     scale=self.config.scale)
-        
-        # self.command = torch.Tensor([1,0,0], device=self.device).repeat(self.num_agents, 1)
 
 
     def make_actions(self, actions: torch.Tensor) -> torch.Tensor:
@@ -140,7 +136,8 @@ class WildAnymalAgent(AbstractAgent):
 
 
     def make_reward(self, dynamics: AbstractDynamics) -> Tuple[torch.Tensor, dict]:
-        rewards_dict = \
+        reward_args = RewardArgs()
+        rewards_dict = 
             self.reward_fn.update_rewards(self.command,
                                           [
                                             Rewards.ang_velocity,
