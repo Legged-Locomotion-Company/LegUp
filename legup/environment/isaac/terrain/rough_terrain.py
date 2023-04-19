@@ -1,8 +1,9 @@
-from legup.common.abstract_terrain import AbstractTerrain
+from legup.abstract.abstract_terrain import AbstractTerrain
 
 from isaacgym import terrain_utils
 from dataclasses import dataclass
 import numpy as np
+
 
 @dataclass
 class RoughTerrain(AbstractTerrain):
@@ -17,10 +18,11 @@ class RoughTerrain(AbstractTerrain):
         subterrain = self.subterrain(
             patch_width, horizontal_scale, vertical_scale)
 
-        return terrain_utils.random_uniform_terrain(subterrain, min_height=self.min_height, max_height=self.max_height, step=self.step, downsampled_scale=self.downsampled_scale).height_field_raw  # type: ignore
-    
+        # type: ignore
+        return terrain_utils.random_uniform_terrain(subterrain, min_height=self.min_height, max_height=self.max_height, step=self.step, downsampled_scale=self.downsampled_scale).height_field_raw
+
     def get_num_robots(self) -> int:
         return self.num_robots
-    
+
     def get_num_patches(self) -> int:
         return self.num_patches

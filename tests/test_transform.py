@@ -1,4 +1,4 @@
-from legup.common.spatial.spatial import Transform, Screw, Twist
+from legup.spatial import Transform, Screw, Twist
 
 import pytest
 

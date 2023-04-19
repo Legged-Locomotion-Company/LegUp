@@ -6,8 +6,8 @@ from typing import Optional, List
 import numpy as np
 
 from legup.environment.isaac.config import IsaacConfig, AssetConfig, CameraConfig, SimulationConfig, TerrainConfig
-from legup.common.abstract_agent import AbstractAgent
-from legup.common.abstract_terrain import AbstractTerrain
+from legup.agents import AbstractAgent
+from legup.abstract.abstract_terrain import AbstractTerrain
 
 
 class IsaacGymFactory:

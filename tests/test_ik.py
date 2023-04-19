@@ -1,6 +1,6 @@
-from legup.common.kinematics import Link, Joint
-from legup.common.spatial.spatial import Transform, Position, Direction, Screw
-from legup.common.kinematics.inverse_kinematics import dls_ik
+from legup.kinematics import Link, Joint
+from legup.spatial import Transform, Position, Direction, Screw
+from legup.kinematics import dls_ik
 
 from typing import Tuple
 

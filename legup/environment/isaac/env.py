@@ -3,8 +3,8 @@ from isaacgym import gymapi, gymtorch
 import torch
 import numpy as np
 
-from legup.common.abstract_env import AbstractEnv, StepResult
-from legup.common.abstract_agent import AbstractAgent
+from legup.abstract.abstract_env import AbstractEnv, StepResult
+from legup.agents import AbstractAgent
 from legup.environment.isaac.factory import IsaacGymFactory
 from legup.environment.isaac.dynamics import IsaacGymDynamics
 from legup.environment.isaac.config import IsaacConfig

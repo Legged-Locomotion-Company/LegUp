@@ -4,10 +4,10 @@ from typing import Optional, Tuple
 
 from omegaconf import DictConfig
 
-from legup.common.abstract_agent import AbstractAgent
-from legup.common.abstract_dynamics import AbstractDynamics
-from legup.common.legged_robot import LeggedRobot
-from legup.common.rewards import calculate_reward, RewardArgs
+from legup.agents import AbstractAgent
+from legup.abstract.abstract_dynamics import AbstractDynamics
+from legup.robot.legged_robot import LeggedRobot
+from legup.rewards import calculate_reward, RewardArgs
 from legup.agents.wild_anymal.wild_anymal_config import WildAnymalConfig
 
 

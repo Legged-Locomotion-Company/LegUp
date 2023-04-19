@@ -2,8 +2,8 @@ import pytest
 
 import torch
 
-from legup.common.spatial import Transform, Direction
-from legup.common.kinematics import Link, Joint
+from legup.spatial import Transform, Direction
+from legup.kinematics import Link, Joint
 
 
 def test_revolute_joint_instantiates():

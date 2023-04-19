@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from legup.common.legup_config import AgentConfig
+from legup.agents import AgentConfig
 
 from typing import List, Dict
 

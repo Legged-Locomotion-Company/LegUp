@@ -1,4 +1,4 @@
-from legup.common.rewards import reward, RewardArgs
+from legup.rewards import reward, RewardArgs
 
 import torch
 

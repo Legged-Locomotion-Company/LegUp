@@ -1,22 +1,23 @@
 import torch
+from abc import ABC, abstractmethod
 from typing import Tuple, List
-
-from omegaconf import DictConfig
+from dataclasses import dataclass
 
 from legup.abstract.abstract_dynamics import AbstractDynamics
 from legup.abstract.abstract_terrain import AbstractTerrain
-from legup.agents import AbstractAgent
+from legup.robot.legged_robot import LeggedRobot
 
 
-class BasicAgent(AbstractAgent):
-    """Empty agent template for testing"""
+@dataclass
+class AgentConfig:
+    agent_name: str
+    tensorboard_log_dir: str
 
-    def __init__(self, device, **kwargs):
-        self.device = device
 
-    def __str__(self):
-        return "HIIIIIIII"
+class AbstractAgent(ABC):
+    """An abstract class for agents to inherit."""
 
+    @abstractmethod
     def make_actions(self, actions: torch.Tensor) -> torch.Tensor:
         """Constructs actions from raw model output
 
@@ -27,8 +28,9 @@ class BasicAgent(AbstractAgent):
             torch.Tensor: DOF positions, shape `(num_agents, num_dof)`
         """
 
-        return torch.zeros()
+        pass
 
+    @abstractmethod
     def reset_agents(self, terminated_agents: torch.Tensor) -> None:
         """Called right after reseting any terminated agents, use this to reset any local buffers and resample new commands
 
@@ -37,10 +39,12 @@ class BasicAgent(AbstractAgent):
         """
         pass
 
+    @abstractmethod
     def post_physics_step(self) -> None:
         """Called right after stepping in the environment, use this to update any local buffers"""
         pass
 
+    @abstractmethod
     def make_observation(self, dynamics: AbstractDynamics) -> torch.Tensor:
         """Called to create a new observation from the environment
 
@@ -50,8 +54,9 @@ class BasicAgent(AbstractAgent):
         Returns:
             torch.Tensor: Observation tensor of shape `(num_agents, obs_space)`
         """
-        return torch.zeros()
+        pass
 
+    @abstractmethod
     def make_reward(self, dynamics: AbstractDynamics) -> Tuple[torch.Tensor, dict]:
         """Called to calculate rewards in the new environment
 
@@ -61,8 +66,9 @@ class BasicAgent(AbstractAgent):
         Returns:
             torch.Tensor: Reward tensor of shape `(num_agents)`
         """
-        return (torch.zeros(), {})
+        pass
 
+    @abstractmethod
     def find_terminated(self, dynamics: AbstractDynamics) -> torch.Tensor:
         """Called when the environment needs to check which agents have terminated
 
@@ -74,8 +80,9 @@ class BasicAgent(AbstractAgent):
             - A) the agent indices that terminated
             - B) a truthy boolean tensor where 1 means an agent has terminated
         """
-        return torch.zeros()
+        pass
 
+    @abstractmethod
     def sample_new_position(self, num_positions: int, pos_lower: Tuple[int, int, int], pos_upper: Tuple[int, int, int]) -> torch.Tensor:
         """Called when the environment needs to sample new positions for robot root
 
@@ -87,8 +94,9 @@ class BasicAgent(AbstractAgent):
         Returns:
             torch.Tensor: returns sampled positions of shape `(num_agents, 3)`
         """
-        return torch.zeros()
+        pass
 
+    @abstractmethod
     def sample_new_quaternion(self, num_quats: int) -> torch.Tensor:
         """Called when the environment needs to sample new quaternions for robot root
 
@@ -98,8 +106,9 @@ class BasicAgent(AbstractAgent):
         Returns:
             torch.Tensor: returns sampled quaternions of shape `(num_agents, 4)`
         """
-        return torch.zeros()
+        pass
 
+    @abstractmethod
     def sample_new_joint_pos(self, num_pos: int) -> torch.Tensor:
         """Called when the environment needs to sample new robot joint positions
 
@@ -109,12 +118,13 @@ class BasicAgent(AbstractAgent):
         Returns:
             torch.Tensor: new joint positions of shape `(num_pos, num_dof)`
         """
-        return torch.zeros()
+        pass
 
+    @abstractmethod
     def generate_new_terrain(self) -> List[AbstractTerrain]:
         """Called after every rollout to check if the environment should change its terrain
 
         Returns:
             Optional[List[Any]]: None if no change, new terrain configurations otherwise
         """
-        return []
+        pass

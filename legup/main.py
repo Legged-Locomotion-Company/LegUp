@@ -4,7 +4,7 @@ import hydra
 import torch
 from omegaconf import DictConfig
 
-from legup.robots.mini_cheetah import mini_cheetah
+from legup.robot.robots.mini_cheetah import mini_cheetah
 
 '''
 TODO:

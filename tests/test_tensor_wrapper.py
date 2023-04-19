@@ -1,4 +1,4 @@
-from legup.common.tensor_types import TensorWrapper
+from legup.tensor_types import TensorWrapper
 
 import torch
 

@@ -3,7 +3,7 @@ from isaacgym import gymtorch
 import torch
 from typing import Callable, List
 
-from legup.common.abstract_dynamics import AbstractDynamics
+from legup.abstract.abstract_dynamics import AbstractDynamics
 
 
 class TensorTracker:
