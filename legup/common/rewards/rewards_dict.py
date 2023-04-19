@@ -9,6 +9,7 @@ import torch
 class RewardArgs(NamedTuple):
     dynamics: AbstractDynamics
     robot: LeggedRobot
+    device: torch.device
 
 
 rewards_dict: Dict[str, Callable[[RewardArgs], torch.Tensor]] = {}

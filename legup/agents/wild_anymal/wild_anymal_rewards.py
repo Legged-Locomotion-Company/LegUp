@@ -6,6 +6,8 @@ import torch
 class WildAnymalRewardArgs(RewardArgs):
     command: torch.Tensor
     curriculum_factor: float
+    joint_position_hist: torch.Tensor
+    joint_velocity_hist: torch.Tensor
 
 
 @reward
@@ -45,7 +47,7 @@ def ang_velocity(reward_args: WildAnymalRewardArgs) -> torch.Tensor:
 
     if (command := getattr(reward_args, 'command')) is None:
         command = torch.zeros((reward_args.dynamics.get_num_agents(), 3),
-                              device=reward_args.dynamics.device())
+                              device=reward_args.device)
 
     w_des_yaw = command[:, :2]
     w_act_yaw = reward_args.dynamics.get_angular_velocity()[:, :2]
@@ -129,7 +131,7 @@ def shank_or_knee_col(reward_args: WildAnymalRewardArgs) -> torch.Tensor:
 def joint_motion(reward_args: WildAnymalRewardArgs) -> torch.Tensor:
     """This term penalizes the joint velocity and acceleration to avoid vibrations"""
 
-    j_vel_hist = reward_args.dynamics.get_joint_velocity_hist()
+    j_vel_hist = reward_args.joint_velocity_hist
     j_vel = j_vel_hist[0]
     j_vel_t_1 = j_vel_hist[1]
 
@@ -158,7 +160,7 @@ def joint_constraint(reward_args: WildAnymalRewardArgs):
 def target_smoothness(reward_args: WildAnymalRewardArgs) -> torch.Tensor:
     """This term penalizes the smoothness of the target foot trajectories"""
 
-    joint_target_hist = reward_args.dynamics.get_joint_position_hist()
+    joint_target_hist = reward_args.dynamics.joint_pos
     joint_target_t = joint_target_hist[0]
     joint_target_tm1 = joint_target_hist[1]
     joint_target_tm2 = joint_target_hist[2]
