@@ -14,6 +14,13 @@ max_tilt: 4.71239
 pos_delta_clip: 0.25
 phase_delta_clip: 1.0
 
+robot: mini_cheetah
+joint_limits:
+  knee_FL: 0.4
+  knee_FR: 0.4
+  knee_BL: 0.4
+  knee_BR: 0.4
+
 reward_scales:
   velocity: 0.75
   body_motion: 0.1
