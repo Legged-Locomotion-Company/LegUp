@@ -43,46 +43,6 @@ class TensorWrapper(ABC):
 
         return self
 
-    def unsqueeze_to_broadcast(self: TensorWrapperSubclass, pre_shape: Iterable[int]) -> TensorWrapperSubclass:
-        """Creates a new tensor which is unsqueezed until it is broadcastable with pre_shape, or throws an error if it cannot be broadcasted.
-
-        Args:
-            pre_shape (Iterable[int]): The desired shape to broadcast the tensor to.
-
-        Raises:
-            ValueError: If the tensor cannot be broadcasted to the desired shape.
-
-        Returns:
-            TensorWrapperSubclass: The tensor with the desired shape.
-        """
-
-        pre_shape = list(pre_shape)
-
-        target_shape = torch.Size(pre_shape) + \
-            self.tensor.shape[-len(self.end_shape):]
-        broadcast_shape = [1] * len(target_shape)
-
-        for i in range(len(pre_shape)-1, -1, -1):
-            if pre_shape[i] != target_shape[i]:
-                if target_shape[i] == 1:
-                    broadcast_shape[i] = self.tensor.shape[-len(
-                        self.end_shape)+i]
-                else:
-                    raise ValueError(
-                        f"Cannot broadcast tensor of shape {self.pre_shape()} to shape {pre_shape}")
-
-        new_tensor = self.tensor.view(
-            self.pre_shape() + [1] * len(self.end_shape))
-        new_tensor = new_tensor.expand(self.pre_shape() + broadcast_shape)
-
-        try:
-            new_tensor = new_tensor.reshape(target_shape)
-        except RuntimeError:
-            raise ValueError(
-                f"Cannot broadcast tensor of shape {self.pre_shape()} to shape {pre_shape}")
-
-        return self.__class__(new_tensor)
-
     @staticmethod
     def stack(tensors: Iterable[TensorWrapperSubclass], dim: int = 0) -> TensorWrapperSubclass:
         """Stacks a list of tensors into a single tensor. This is a static method, so it can be called on the class itself."""
@@ -118,9 +78,9 @@ class TensorWrapper(ABC):
         return self.__class__(new_raw_tensor)
 
     def broadcast_to(self: TensorWrapperSubclass, pre_shape: Iterable[int]) -> TensorWrapperSubclass:
-        end_shape = list(pre_shape) + self.end_shape
+        full_shape = list(pre_shape) + self.end_shape
 
-        return self.__class__(self.tensor.broadcast_to(end_shape))
+        return self.__class__(self.tensor.broadcast_to(full_shape))
 
     @staticmethod
     def get_broadcast_pre_shape(tensor_wrappers: Iterable[Union["TensorWrapper", torch.Tensor]]) -> List[int]:

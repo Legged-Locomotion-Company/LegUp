@@ -45,7 +45,7 @@ def test_tensor_wrapper_class_broadcast():
     broadcast_pre_shape = TensorWrapper.get_broadcast_pre_shape(
         (a_wrapper, b_wrapper))
 
-    a_broadcast = a_wrapper.unsqueeze_to_broadcast(broadcast_pre_shape)
-    b_broadcast = b_wrapper.unsqueeze_to_broadcast(broadcast_pre_shape)
+    a_wrapper.broadcast_to(broadcast_pre_shape)
+    b_wrapper.broadcast_to(broadcast_pre_shape)
 
     assert True
