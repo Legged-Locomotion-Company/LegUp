@@ -7,7 +7,7 @@ from omegaconf import DictConfig
 from legup.common.abstract_agent import AbstractAgent
 from legup.common.abstract_dynamics import AbstractDynamics
 from legup.common.legged_robot import LeggedRobot
-from legup.common.rewards.reward_funcs import Reward
+from legup.common.rewards import calculate_reward
 from .wild_anymal_config import WildAnymalConfig
 
 
@@ -22,7 +22,9 @@ class WildAnymalAgent(AbstractAgent):
         # TODO: figure out how to get the device
 
         # TODO: add reward function shit here
+        
         self.robot = robot
+        self.device = device
         print("wild anymal created")
         # self.reward_fn = Rewards(
         #     dynamics=self.dynamics,

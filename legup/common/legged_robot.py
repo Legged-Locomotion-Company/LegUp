@@ -2,19 +2,22 @@ from legup.common.kinematics import Joint, Link
 from legup.common.spatial import Position
 from legup.common.kinematics.inverse_kinematics import IKFunction, dls_ik
 
-from typing import Iterable, Optional, List, Dict
+from typing import Iterable, Optional, List, Dict, Tuple
 from tensor_types import TensorWrapper
 
 import torch
 
 
 class LeggedRobot:
+    """_summary_
+    """
+
     def __init__(self,
                  name: str,
                  base_link: Link,
                  primary_contacts: Iterable[str],
                  secondary_contacts: Iterable[str],
-                 limited_joint_names: Iterable[str],
+                 joint_limits: Dict[str, (float, float)],
                  model_idx_dict: Dict[str, int],
                  home_position: Optional[Dict[str, List[float]]] = None):
         """_summary_
@@ -36,7 +39,7 @@ class LeggedRobot:
 
         self.primary_contacts = primary_contacts
         self.secondary_contacts = secondary_contacts
-        self.limited_joint_names = limited_joint_names
+        self.joint_limts = joint_limits
 
         self.model_idx_dict = model_idx_dict
 
@@ -90,4 +93,10 @@ class LeggedRobot:
     def limited_joint_model_idxs(self) -> List[int]:
 
         return [self.model_idx_dict[limited_joint_name]
-                for limited_joint_name in self.limited_joint_names]
+                for limited_joint_name in self.joint_limts.keys()]
+
+    @property
+    def limited_joint_limits(self) -> List[Tuple[float, float]]:
+
+        return [(upper_bound, lower_bound)
+                for upper_bound, lower_bound in self.joint_limts.values()]
